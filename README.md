@@ -1,15 +1,15 @@
 # Simple Social Media
 
-Nx monorepo scaffold for the specification in [SPEC.md](./SPEC.md).
+本專案是依據 [SPEC.md](./SPEC.md) 建立的 Nx monorepo 開發骨架。
 
-## Stack
+## 技術棧
 
 - `apps/web`: Vue 3 + TypeScript + Pinia + Vue Router + Vite
 - `apps/api`: Spring Boot + Gradle + Spring Security + MyBatis + springdoc OpenAPI
-- `libs/shared/api-contract`: generated client from `/v3/api-docs`
-- `DB/`: DDL, DML, and stored procedure scripts
+- `libs/shared/api-contract`: 由 `/v3/api-docs` 產生的 API Client
+- `DB/`: DDL、DML 與 Stored Procedure 腳本
 
-## Commands
+## 常用指令
 
 ```sh
 npm install
@@ -18,7 +18,7 @@ npm run sync:openapi
 npm run dev:web
 ```
 
-Useful Nx targets:
+常用 Nx Target：
 
 ```sh
 npx nx serve api
@@ -28,15 +28,15 @@ npx nx test api
 npx nx run api-contract:sync
 ```
 
-## API Profile and Env Keys（#004）
+## API Profile 與環境變數（#004）
 
-API scaffold uses Spring profile `dev` by default. You can override with:
+API 預設使用 Spring profile `dev`，可透過下列方式覆寫：
 
 ```sh
 SPRING_PROFILES_ACTIVE=dev npm run dev:api
 ```
 
-Current API env keys and defaults:
+目前 API 主要環境變數與預設值：
 
 - `SPRING_PROFILES_ACTIVE=dev`
 - `API_PORT=8080`
@@ -44,37 +44,37 @@ Current API env keys and defaults:
 - `AUTH_ACCESS_TOKEN_TTL_SECONDS=900`
 - `AUTH_REFRESH_TOKEN_TTL_SECONDS=2592000`
 
-## Scaffold Smoke Check（#003）
+## 骨架 Smoke Check（#003）
 
 已驗證以下指令可於本機啟動（2026-03-28）：
 
 - `npm run dev:api` -> `http://localhost:8080/swagger-ui.html`
 - `npm run dev:web` -> `http://localhost:4200/`
 
-## Local DB
+## 本機資料庫（Local DB）
 
-This repo is currently MySQL-based, not PostgreSQL-based. The spec, SQL scripts, and backend runtime dependency all target MySQL 8.
+本專案目前使用 MySQL，而非 PostgreSQL。規格、SQL 腳本與後端執行相依皆以 MySQL 8 為目標。
 
-Start the database container:
+啟動資料庫容器：
 
 ```sh
 cp .env.db.example .env.db
 docker compose -f docker-compose.db.yml up -d
 ```
 
-Stop it:
+停止資料庫容器：
 
 ```sh
 docker compose -f docker-compose.db.yml down
 ```
 
-The container will initialize the schema and stored procedures from `DB/` on first startup. If you need a clean reset:
+容器首次啟動時，會自動從 `DB/` 初始化 schema 與 stored procedures。若需要完整重置：
 
 ```sh
 docker compose -f docker-compose.db.yml down -v
 ```
 
-Default connection values:
+預設連線參數：
 
 - host: `127.0.0.1`
 - port: `3306`
@@ -83,28 +83,28 @@ Default connection values:
 - password: `social_password`
 - root password: `root_password`
 
-Quick check:
+快速檢查：
 
 ```sh
 docker compose -f docker-compose.db.yml ps
 ```
 
-## OpenAPI flow
+## OpenAPI 流程
 
-1. Start the backend on `http://127.0.0.1:8080`
-2. Run `npm run sync:openapi`
-3. Generated client files land in `libs/shared/api-contract/src/generated`
+1. 先啟動 backend（`http://127.0.0.1:8080`）
+2. 執行 `npm run sync:openapi`
+3. 產生的 Client 會落在 `libs/shared/api-contract/src/generated`
 
-The repo does not keep an OpenAPI snapshot. `openapi-typescript-codegen` generates directly from the live Springdoc endpoint at `http://127.0.0.1:8080/v3/api-docs`, following the same style used in `/Users/hezibin/bindev/ucup-front`.
+本專案不保存 OpenAPI snapshot。`openapi-typescript-codegen` 會直接從執行中的 Springdoc endpoint（`http://127.0.0.1:8080/v3/api-docs`）產生。
 
-## Auth Spec
+## Auth 規格文件
 
 - [手機註冊與登入流程規格（#001）](./docs/auth/phone-auth-flow-spec.md)
 - [Auth Token 生命週期與安全策略（#002）](./docs/auth/token-lifecycle-security-spec.md)
 
-## Notes
+## 備註
 
-- The backend is intentionally scaffolded with in-memory services so it can boot before MySQL is wired.
-- JDBC/MyBatis auto-configuration is excluded for now; the SQL assets under `DB/` match the final target schema and stored procedure plan.
-- Swagger UI is available at `/swagger-ui/index.html` once the backend is running.
-- I did not add CI/CD Dockerfiles yet. That follow-up is intentionally deferred.
+- 後端功能服務目前仍有部分是 in-memory scaffold，DB-backed 的 MyBatis 服務會逐步遷移。
+- `dev` profile 已啟用 JDBC/MyBatis auto-configuration；`DB/` 下的 SQL 仍是 schema 與 procedures 的唯一來源。
+- Backend 啟動後可於 `/swagger-ui/index.html` 使用 Swagger UI。
+- 目前尚未加入 CI/CD Dockerfile，此項目刻意延後處理。
