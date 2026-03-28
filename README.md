@@ -89,6 +89,17 @@ docker compose -f docker-compose.db.yml down -v
 docker compose -f docker-compose.db.yml ps
 ```
 
+## DB Migration（Flyway）
+
+`apps/api` 已接入 Flyway，migration SQL 位置：
+
+- `apps/api/src/main/resources/db/migration`
+
+目前 baseline migration 來自現有 `DB/ddl` 與 `DB/sp` 腳本整併，啟動 API 時預設會執行 migration（`DB_MIGRATION_ENABLED=true`）。
+
+- 對於已由 Docker 初始化且已有資料表的 DB：會以 `baseline-on-migrate` 自動建置版本紀錄，不會重建既有結構
+- 對於全新空資料庫：會從 `V1__init_schema_and_procedures.sql` 建立 schema 與 procedures
+
 ## OpenAPI 流程
 
 1. 先啟動 backend（`http://127.0.0.1:8080`）
