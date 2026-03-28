@@ -28,3 +28,19 @@ app:
     access-token-ttl-seconds: ${AUTH_ACCESS_TOKEN_TTL_SECONDS:900}
     # 30 days by default for refresh token lifecycle in current auth spec (#002).
     refresh-token-ttl-seconds: ${AUTH_REFRESH_TOKEN_TTL_SECONDS:2592000}
+    registration-token-ttl-seconds: ${AUTH_REGISTRATION_TOKEN_TTL_SECONDS:600}
+    otp:
+      max-attempts: ${AUTH_OTP_MAX_ATTEMPTS:5}
+    access-token-secret: ${AUTH_ACCESS_TOKEN_SECRET:change-me-in-env}
+    refresh-cookie-name: ${AUTH_REFRESH_COOKIE_NAME:refreshToken}
+    # Set true in production (HTTPS) to prevent cookie exposure over HTTP.
+    cookie-secure: ${AUTH_COOKIE_SECURE:false}
+    cookie-same-site: ${AUTH_COOKIE_SAME_SITE:Lax}
+    sms:
+      provider: ${AUTH_SMS_PROVIDER:mock}
+      twilio:
+        account-sid: ${TWILIO_ACCOUNT_SID:}
+        auth-token: ${TWILIO_AUTH_TOKEN:}
+        verify-service-sid: ${TWILIO_VERIFY_SERVICE_SID:}
+        # Keep aligned with existing Python service default.
+        locale: ${TWILIO_VERIFY_LOCALE:zh-HK}
