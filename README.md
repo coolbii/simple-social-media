@@ -74,6 +74,10 @@ docker compose -f docker-compose.db.yml ps
 
 The repo does not keep an OpenAPI snapshot. `openapi-typescript-codegen` generates directly from the live Springdoc endpoint at `http://127.0.0.1:8080/v3/api-docs`, following the same style used in `/Users/hezibin/bindev/ucup-front`.
 
+## Auth Spec
+
+- [手機註冊與登入流程規格（#001）](./docs/auth/phone-auth-flow-spec.md)
+
 ## Notes
 
 - The backend is intentionally scaffolded with in-memory services so it can boot before MySQL is wired.
