@@ -77,6 +77,7 @@ The repo does not keep an OpenAPI snapshot. `openapi-typescript-codegen` generat
 ## Auth Spec
 
 - [手機註冊與登入流程規格（#001）](./docs/auth/phone-auth-flow-spec.md)
+- [Auth Token 生命週期與安全策略（#002）](./docs/auth/token-lifecycle-security-spec.md)
 
 ## Notes
 
