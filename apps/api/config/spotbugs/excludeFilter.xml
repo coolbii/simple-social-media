@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  SpotBugs exclusion filter for simple-social-media.
+  Excludes test classes and generated code from bug analysis.
+  Run: ./gradlew spotbugsMain spotbugsTest
+-->
+<FindBugsFilter
+    xmlns="https://github.com/spotbugs/filter/3.0.0"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="https://github.com/spotbugs/filter/3.0.0
+      https://raw.githubusercontent.com/spotbugs/spotbugs/master/spotbugs/etc/findbugsfilter.xsd">
+
+  <!-- Skip test classes (they can have intentional bad patterns) -->
+  <Match>
+    <Class name="~.*Test$"/>
+  </Match>
+  <Match>
+    <Class name="~.*Tests$"/>
+  </Match>
+  <Match>
+    <Class name="~.*IT$"/>
+  </Match>
+
+  <!-- Skip generated OpenAPI / MapStruct code -->
+  <Match>
+    <Package name="~.*\.generated\..*"/>
+  </Match>
+
+</FindBugsFilter>

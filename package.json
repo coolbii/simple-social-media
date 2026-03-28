@@ -6,7 +6,13 @@
     "dev:api": "nx serve api",
     "dev:web": "nx dev web",
     "sync:openapi": "nx run api-contract:sync",
-    "dev:web:sync": "npm run sync:openapi && nx dev web"
+    "dev:web:sync": "npm run sync:openapi && nx dev web",
+    "lint:staged": "lint-staged",
+    "lint:check": "npm run lint:check:all",
+    "lint:check:all": "npm run lint:check:web && npm run lint:check:java",
+    "lint:check:web": "nx run-many -t lint -p web,feature-auth,feature-post,feature-comment,ui,utils,api-contract",
+    "lint:check:java": "nx run api:lint",
+    "prepare": "husky"
   },
   "private": true,
   "devDependencies": {
@@ -34,8 +40,10 @@
     "eslint": "^9.8.0",
     "eslint-config-prettier": "^10.0.0",
     "eslint-plugin-vue": "^9.16.1",
+    "husky": "^9.1.7",
     "jiti": "2.4.2",
     "jsdom": "~22.1.0",
+    "lint-staged": "^16.4.0",
     "nx": "22.6.3",
     "openapi-typescript-codegen": "^0.29.0",
     "prettier": "~3.6.2",
@@ -45,6 +53,18 @@
     "vite": "^8.0.0",
     "vitest": "~4.0.0",
     "vue-tsc": "^2.2.8"
+  },
+  "lint-staged": {
+    "{apps/web,libs/web}/src/**/*.{ts,tsx,js,jsx,vue}": [
+      "eslint --fix --config apps/web/eslint.config.mjs",
+      "prettier --write"
+    ],
+    "*.{json,md,yml,yaml}": [
+      "prettier --write"
+    ],
+    "apps/api/src/**/*.java": [
+      "bash -c 'cd apps/api && ./gradlew checkstyleMain --daemon --quiet'"
+    ]
   },
   "dependencies": {
     "pinia": "^3.0.4",

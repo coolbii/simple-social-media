@@ -6,19 +6,10 @@ import { RouterView } from 'vue-router';
   <div class="app-shell">
     <header class="topbar">
       <div>
-        <p class="eyebrow">
-          Nx + Vue 3 + Spring Boot
-        </p>
-        <a
-          class="brand"
-          href="/"
-        >
-          Simple Social Media
-        </a>
+        <p class="eyebrow">Nx + Vue 3 + Spring Boot</p>
+        <a class="brand" href="/"> Simple Social Media </a>
       </div>
-      <p class="tagline">
-        Initial scaffold workspace
-      </p>
+      <p class="tagline">Initial scaffold workspace</p>
     </header>
 
     <main class="page-shell">

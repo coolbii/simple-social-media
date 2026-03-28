@@ -9,12 +9,12 @@ import org.springframework.context.annotation.Configuration;
 @MapperScan(basePackages = "com.example.social")
 public class MybatisConfig {
 
-	@Bean
-	public ConfigurationCustomizer mybatisConfigurationCustomizer() {
-		return configuration -> {
-			configuration.setMapUnderscoreToCamelCase(true);
-			configuration.setCallSettersOnNulls(true);
-			configuration.setDefaultStatementTimeout(30);
-		};
-	}
+    @Bean
+    public ConfigurationCustomizer mybatisConfigurationCustomizer() {
+        return configuration -> {
+            configuration.setMapUnderscoreToCamelCase(true);
+            configuration.setCallSettersOnNulls(true);
+            configuration.setDefaultStatementTimeout(30);
+        };
+    }
 }

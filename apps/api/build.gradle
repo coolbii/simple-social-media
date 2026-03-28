@@ -3,6 +3,9 @@ plugins {
 	id 'org.springframework.boot' version '4.0.5'
 	id 'io.spring.dependency-management' version '1.1.7'
 	id 'maven-publish'
+	id 'checkstyle'
+	id 'pmd'
+	id 'com.github.spotbugs' version '6.1.0'
 }
 
 group = 'com.example.social'
@@ -37,6 +40,36 @@ dependencies {
 
 tasks.named('test') {
 	useJUnitPlatform()
+}
+
+// ─── Checkstyle (style & formatting) ─────────────────────────────
+checkstyle {
+	toolVersion = '10.21.0'
+	configFile = file('config/checkstyle/checkstyle.xml')
+	maxWarnings = 0
+}
+
+// ─── PMD (code smells & bad practices) ───────────────────────────
+pmd {
+	toolVersion = '7.9.0'
+	ruleSetFiles = files('config/pmd/ruleset.xml')
+	ruleSets = []   // disable built-in rulesets; use only our file
+	consoleOutput = true
+}
+
+// ─── SpotBugs (potential bugs) ───────────────────────────────────
+spotbugs {
+	toolVersion = '4.9.3'
+	effort = 'MAX'
+	reportLevel = 'MEDIUM'
+	excludeFilter = file('config/spotbugs/excludeFilter.xml')
+}
+
+tasks.withType(com.github.spotbugs.snom.SpotBugsTask).configureEach {
+	reports {
+		html.required = true
+		xml.required  = false
+	}
 }
 springBoot {
 	buildInfo()

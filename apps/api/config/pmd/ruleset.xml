@@ -1,0 +1,63 @@
+<?xml version="1.0"?>
+<ruleset name="simple-social-media"
+    xmlns="http://pmd.sourceforge.net/ruleset/2.0.0"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://pmd.sourceforge.net/ruleset/2.0.0
+                        https://pmd.sourceforge.io/ruleset_2_0_0.xsd">
+
+  <description>
+    PMD ruleset for simple-social-media (Java 21 / Spring Boot 4).
+    Includes all rules from five core categories, with pragmatic
+    exclusions for Spring Boot patterns and modern Java idioms.
+    Run: ./gradlew pmdMain pmdTest
+  </description>
+
+  <!-- ═══ Best Practices ══════════════════════════════════════════════ -->
+  <rule ref="category/java/bestpractices.xml">
+    <!-- SLF4J evaluates lazily — no guard needed -->
+    <exclude name="GuardLogStatement"/>
+    <!-- Integration tests often need many assertions -->
+    <exclude name="JUnitTestContainsTooManyAsserts"/>
+    <exclude name="JUnitAssertionsShouldIncludeMessage"/>
+    <!-- Spring beans use field/constructor injection, not accessors -->
+    <exclude name="AccessorClassGeneration"/>
+    <exclude name="AccessorMethodGeneration"/>
+  </rule>
+
+  <!-- ═══ Code Style ══════════════════════════════════════════════════ -->
+  <rule ref="category/java/codestyle.xml">
+    <!-- Spring beans are instantiated by the container -->
+    <exclude name="AtLeastOneConstructor"/>
+    <exclude name="CallSuperInConstructor"/>
+    <!-- Package-private access is intentional in some designs -->
+    <exclude name="CommentDefaultAccessModifier"/>
+    <!-- Early returns improve readability in guard clauses -->
+    <exclude name="OnlyOneReturn"/>
+    <!-- Descriptive names are encouraged; don't restrict length -->
+    <exclude name="LongVariable"/>
+    <exclude name="ShortVariable"/>
+    <exclude name="ShortClassName"/>
+    <!-- Avoid micromanaging import order here (Checkstyle handles ordering) -->
+    <exclude name="UnnecessaryFullyQualifiedName"/>
+  </rule>
+
+  <!-- ═══ Design ══════════════════════════════════════════════════════ -->
+  <rule ref="category/java/design.xml">
+    <!-- Law of Demeter is too strict for fluent Spring APIs -->
+    <exclude name="LawOfDemeter"/>
+    <!-- Package coupling analysis is noisy without module boundaries -->
+    <exclude name="LoosePackageCoupling"/>
+  </rule>
+
+  <!-- ═══ Error Prone ═════════════════════════════════════════════════ -->
+  <rule ref="category/java/errorprone.xml">
+    <!-- Null assignments can be intentional (e.g. clearing references) -->
+    <exclude name="NullAssignment"/>
+    <!-- Deprecated / very noisy in Java 21 -->
+    <exclude name="DataflowAnomalyAnalysis"/>
+  </rule>
+
+  <!-- ═══ Performance ═════════════════════════════════════════════════ -->
+  <rule ref="category/java/performance.xml"/>
+
+</ruleset>

@@ -14,31 +14,31 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
-	@ExceptionHandler(ApiException.class)
-	public ResponseEntity<Map<String, ApiError>> handleApiException(ApiException exception) {
-		return ResponseEntity.status(exception.getStatus())
-			.body(Map.of("error", new ApiError(exception.getErrorCode().name(), exception.getMessage())));
-	}
+    @ExceptionHandler(ApiException.class)
+    public ResponseEntity<Map<String, ApiError>> handleApiException(ApiException exception) {
+        return ResponseEntity.status(exception.getStatus())
+            .body(Map.of("error", new ApiError(exception.getErrorCode().name(), exception.getMessage())));
+    }
 
-	@ExceptionHandler(MethodArgumentNotValidException.class)
-	public ResponseEntity<Map<String, ApiError>> handleValidationException(
-		MethodArgumentNotValidException exception
-	) {
-		Map<String, String> validationErrors = new HashMap<>();
-		for (FieldError fieldError : exception.getBindingResult().getFieldErrors()) {
-			validationErrors.put(fieldError.getField(), fieldError.getDefaultMessage());
-		}
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    public ResponseEntity<Map<String, ApiError>> handleValidationException(
+        MethodArgumentNotValidException exception
+    ) {
+        Map<String, String> validationErrors = new HashMap<>();
+        for (FieldError fieldError : exception.getBindingResult().getFieldErrors()) {
+            validationErrors.put(fieldError.getField(), fieldError.getDefaultMessage());
+        }
 
-		String message = validationErrors.isEmpty()
-			? "Request validation failed."
-			: "Request validation failed.";
+        String message = validationErrors.isEmpty()
+            ? "Request validation failed."
+            : "Request validation failed.";
 
-		return ResponseEntity.status(HttpStatus.BAD_REQUEST)
-			.body(
-				Map.of(
-					"error",
-					new ApiError(ErrorCode.VALIDATION_ERROR.name(), message, Map.copyOf(validationErrors))
-				)
-			);
-	}
+        return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+            .body(
+                Map.of(
+                    "error",
+                    new ApiError(ErrorCode.VALIDATION_ERROR.name(), message, Map.copyOf(validationErrors))
+                )
+            );
+    }
 }

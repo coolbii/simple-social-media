@@ -1,15 +1,11 @@
-<script setup lang="ts">
-</script>
+<script setup lang="ts"></script>
 
 <template>
   <section class="hero-card">
-    <p class="section-label">
-      Welcome
-    </p>
+    <p class="section-label">Welcome</p>
     <h1>Simple Social Media Scaffold</h1>
     <p class="lead">
-      Frontend and backend scaffolding are ready. Feature implementation will be
-      added in follow-up commits.
+      Frontend and backend scaffolding are ready. Feature implementation will be added in follow-up commits.
     </p>
     <ul class="checklist">
       <li>Vue 3 + Vite + Pinia project setup</li>

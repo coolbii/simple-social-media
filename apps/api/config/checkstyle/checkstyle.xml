@@ -1,0 +1,104 @@
+<?xml version="1.0"?>
+<!DOCTYPE module PUBLIC
+    "-//Checkstyle//DTD Checkstyle Configuration 1.3//EN"
+    "https://checkstyle.org/dtds/configuration_1_3.dtd">
+
+<!--
+  Checkstyle rules for simple-social-media (Java 21 / Spring Boot 4)
+  Style baseline: Google Java Style Guide, adapted for Spring Boot.
+  Run: ./gradlew checkstyleMain checkstyleTest
+-->
+<module name="Checker">
+  <property name="severity"        value="error"/>
+  <property name="fileExtensions"  value="java"/>
+
+  <!-- No hard-tab characters -->
+  <module name="FileTabCharacter">
+    <property name="eachLine" value="true"/>
+  </module>
+
+  <!-- File must end with a newline -->
+  <module name="NewlineAtEndOfFile"/>
+
+  <!-- ═══ Size Limits (file-level) ═══════════════════════════════════ -->
+  <module name="LineLength">
+    <!-- ignore package/import lines and long URLs -->
+    <property name="max"           value="120"/>
+    <property name="ignorePattern" value="^package\s|^import\s|https?://|ftp://"/>
+  </module>
+
+  <module name="TreeWalker">
+
+    <!-- ═══ Naming Conventions ═══════════════════════════════════════ -->
+    <module name="PackageName">
+      <property name="format" value="^[a-z]+(\.[a-z][a-z0-9]*)*$"/>
+    </module>
+    <module name="TypeName"/>
+    <module name="ConstantName"/>
+    <module name="StaticVariableName"/>
+    <module name="MemberName"/>
+    <module name="LocalVariableName"/>
+    <module name="MethodName"/>
+    <module name="ParameterName"/>
+
+    <!-- ═══ Imports ══════════════════════════════════════════════════ -->
+    <module name="AvoidStarImport"/>
+    <module name="RedundantImport"/>
+    <module name="UnusedImports"/>
+    <module name="IllegalImport"/> <!-- blocks sun.* -->
+
+    <!-- ═══ Size Limits ══════════════════════════════════════════════ -->
+    <module name="MethodLength">
+      <property name="max" value="80"/>
+    </module>
+    <module name="ParameterNumber">
+      <property name="max" value="7"/>
+    </module>
+
+    <!-- ═══ Whitespace ═══════════════════════════════════════════════ -->
+    <module name="GenericWhitespace"/>
+    <module name="MethodParamPad"/>
+    <module name="NoWhitespaceBefore"/>
+    <module name="ParenPad"/>
+    <module name="WhitespaceAfter"/>
+
+    <!-- ═══ Block Checks ═════════════════════════════════════════════ -->
+    <module name="NeedBraces"/>
+    <module name="LeftCurly"/>
+    <module name="RightCurly"/>
+    <!-- Empty catch blocks must have a comment explaining why -->
+    <module name="EmptyBlock">
+      <property name="option" value="TEXT"/>
+      <property name="tokens"
+        value="LITERAL_WHILE,LITERAL_TRY,LITERAL_FINALLY,LITERAL_DO,
+               LITERAL_IF,LITERAL_ELSE,LITERAL_FOR,LITERAL_SWITCH,
+               INSTANCE_INIT,STATIC_INIT,LITERAL_SYNCHRONIZED"/>
+    </module>
+
+    <!-- ═══ Coding Best Practices ════════════════════════════════════ -->
+    <!-- Empty catch blocks must have a comment -->
+    <module name="EmptyCatchBlock">
+      <property name="exceptionVariableName" value="ignored|expected"/>
+    </module>
+    <module name="FallThrough"/>
+    <module name="OneStatementPerLine"/>
+    <module name="MultipleVariableDeclarations"/>
+    <module name="SimplifyBooleanExpression"/>
+    <module name="SimplifyBooleanReturn"/>
+    <module name="StringLiteralEquality"/>   <!-- use .equals() -->
+    <module name="NoFinalizer"/>             <!-- no finalize() -->
+    <module name="MissingSwitchDefault"/>
+    <module name="DefaultComesLast"/>
+    <module name="EqualsHashCode"/>          <!-- override both or neither -->
+    <module name="CovariantEquals"/>
+
+    <!-- ═══ Modifiers ════════════════════════════════════════════════ -->
+    <module name="ModifierOrder"/>
+    <module name="RedundantModifier"/>
+
+    <!-- ═══ Miscellaneous ════════════════════════════════════════════ -->
+    <module name="ArrayTypeStyle"/>   <!-- String[] args, not String args[] -->
+    <module name="UpperEll"/>         <!-- 1L not 1l -->
+
+  </module>
+</module>

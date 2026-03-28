@@ -2,5 +2,15 @@
   "name": "api",
   "$schema": "../../node_modules/nx/schemas/project-schema.json",
   "sourceRoot": "apps/api/src",
-  "tags": []
+  "tags": [],
+  "targets": {
+    "lint": {
+      "executor": "nx:run-commands",
+      "options": {
+        "cwd": "apps/api",
+        "command": "./gradlew checkstyleMain --daemon --quiet"
+      },
+      "inputs": ["default", "^default"]
+    }
+  }
 }
