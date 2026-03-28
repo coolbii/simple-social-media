@@ -1,0 +1,35 @@
+{
+  "compileOnSave": false,
+  "compilerOptions": {
+    "rootDir": ".",
+    "sourceMap": true,
+    "declaration": false,
+    "moduleResolution": "node",
+    "emitDecoratorMetadata": true,
+    "experimentalDecorators": true,
+    "importHelpers": true,
+    "target": "es2015",
+    "module": "esnext",
+    "lib": ["es2020", "dom"],
+    "skipLibCheck": true,
+    "skipDefaultLibCheck": true,
+    "baseUrl": ".",
+    "paths": {
+      "@simple-social-media/api-contract": [
+        "libs/shared/api-contract/src/index.ts"
+      ],
+      "@simple-social-media/utils": ["libs/shared/utils/src/index.ts"],
+      "@simple-social-media/ui": ["libs/web/ui/src/index.ts"],
+      "@simple-social-media/feature-auth": [
+        "libs/web/feature-auth/src/index.ts"
+      ],
+      "@simple-social-media/feature-post": [
+        "libs/web/feature-post/src/index.ts"
+      ],
+      "@simple-social-media/feature-comment": [
+        "libs/web/feature-comment/src/index.ts"
+      ]
+    }
+  },
+  "exclude": ["node_modules", "tmp"]
+}

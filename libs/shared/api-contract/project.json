@@ -1,0 +1,17 @@
+{
+  "name": "api-contract",
+  "$schema": "../../../node_modules/nx/schemas/project-schema.json",
+  "sourceRoot": "libs/shared/api-contract/src",
+  "projectType": "library",
+  "tags": [],
+  "// targets": "to see all targets run: nx show project api-contract --web",
+  "targets": {
+    "sync": {
+      "executor": "nx:run-commands",
+      "outputs": ["{projectRoot}/src/generated"],
+      "options": {
+        "command": "npx openapi --input http://127.0.0.1:8080/v3/api-docs --output libs/shared/api-contract/src/generated --useOptions --useUnionTypes"
+      }
+    }
+  }
+}
