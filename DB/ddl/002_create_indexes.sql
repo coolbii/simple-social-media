@@ -1,0 +1,10 @@
+CREATE INDEX idx_posts_user_created_at ON posts(user_id, created_at DESC);
+CREATE INDEX idx_comments_post_created_at ON comments(post_id, created_at ASC);
+CREATE INDEX idx_refresh_tokens_user_expires_at ON refresh_tokens(user_id, expires_at);
+CREATE INDEX idx_refresh_tokens_family_id ON refresh_tokens(family_id);
+CREATE INDEX idx_refresh_tokens_token_hash ON refresh_tokens(token_hash);
+CREATE INDEX idx_phone_verification_phone_created_at ON phone_verification_requests(phone_number, created_at DESC);
+CREATE INDEX idx_phone_verification_expires_at ON phone_verification_requests(expires_at);
+CREATE INDEX idx_registration_tokens_phone_expires_at ON registration_tokens(phone_number, expires_at);
+CREATE INDEX idx_registration_tokens_expires_at ON registration_tokens(expires_at);
+CREATE INDEX idx_registration_tokens_verification_request ON registration_tokens(verification_request_id);
