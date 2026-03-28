@@ -1,0 +1,30 @@
+spring:
+  application:
+    name: api
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:dev}
+  # Keep DB auto-config disabled globally while the DB layer is scaffold-only.
+  # Remove this block once MySQL/MyBatis wiring is fully implemented.
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.jdbc.autoconfigure.DataSourceAutoConfiguration
+      - org.mybatis.spring.boot.autoconfigure.MybatisAutoConfiguration
+
+server:
+  port: ${API_PORT:8080}
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+
+logging:
+  level:
+    com.example.social: ${API_LOG_LEVEL:INFO}
+
+app:
+  auth:
+    access-token-ttl-seconds: ${AUTH_ACCESS_TOKEN_TTL_SECONDS:900}
+    # 30 days by default for refresh token lifecycle in current auth spec (#002).
+    refresh-token-ttl-seconds: ${AUTH_REFRESH_TOKEN_TTL_SECONDS:2592000}

@@ -28,6 +28,22 @@ npx nx test api
 npx nx run api-contract:sync
 ```
 
+## API Profile and Env Keys（#004）
+
+API scaffold uses Spring profile `dev` by default. You can override with:
+
+```sh
+SPRING_PROFILES_ACTIVE=dev npm run dev:api
+```
+
+Current API env keys and defaults:
+
+- `SPRING_PROFILES_ACTIVE=dev`
+- `API_PORT=8080`
+- `API_LOG_LEVEL=INFO`
+- `AUTH_ACCESS_TOKEN_TTL_SECONDS=900`
+- `AUTH_REFRESH_TOKEN_TTL_SECONDS=2592000`
+
 ## Scaffold Smoke Check（#003）
 
 已驗證以下指令可於本機啟動（2026-03-28）：
