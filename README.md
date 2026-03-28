@@ -28,6 +28,13 @@ npx nx test api
 npx nx run api-contract:sync
 ```
 
+## Scaffold Smoke Check（#003）
+
+已驗證以下指令可於本機啟動（2026-03-28）：
+
+- `npm run dev:api` -> `http://localhost:8080/swagger-ui.html`
+- `npm run dev:web` -> `http://localhost:4200/`
+
 ## Local DB
 
 This repo is currently MySQL-based, not PostgreSQL-based. The spec, SQL scripts, and backend runtime dependency all target MySQL 8.
