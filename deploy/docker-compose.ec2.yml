@@ -1,0 +1,18 @@
+services:
+  api:
+    image: ${API_IMAGE}
+    container_name: simple-social-media-api
+    env_file:
+      - .env.api
+    restart: unless-stopped
+    expose:
+      - '8080'
+
+  web:
+    image: ${WEB_IMAGE}
+    container_name: simple-social-media-web
+    depends_on:
+      - api
+    restart: unless-stopped
+    ports:
+      - '80:80'

@@ -1,0 +1,14 @@
+.git
+.gitignore
+.nx
+node_modules
+**/node_modules
+**/build
+**/.gradle
+coverage
+dist
+.DS_Store
+*.log
+.env
+.env.*
+!.env.db.example

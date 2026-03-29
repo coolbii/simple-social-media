@@ -60,4 +60,4 @@ vitest.config.*.timestamp*
 .env
 .env.*
 !.env.db.example
-
+!deploy/.env.*.example
