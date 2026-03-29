@@ -79,7 +79,7 @@ jobs:
         run: npm run lint:check
 
       - name: Test web
-        run: npx nx test web --runInBand
+        run: npx nx test web
 
       - name: Test api
         run: npx nx test api

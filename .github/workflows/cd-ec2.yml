@@ -74,6 +74,21 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Validate required deploy secrets
+        env:
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+          EC2_USER: ${{ secrets.EC2_USER }}
+          EC2_SSH_PRIVATE_KEY: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
+          GHCR_READ_TOKEN: ${{ secrets.GHCR_READ_TOKEN }}
+        run: |
+          set -euo pipefail
+          for key in EC2_HOST EC2_USER EC2_SSH_PRIVATE_KEY GHCR_READ_TOKEN; do
+            if [[ -z "${!key:-}" ]]; then
+              echo "::error::Missing required secret in production environment: ${key}"
+              exit 1
+            fi
+          done
+
       - name: Configure SSH key
         run: |
           set -euo pipefail
