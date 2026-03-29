@@ -50,7 +50,9 @@ public class PostService {
         Post existing = requirePost(postId);
         ensureOwner(existing, actorUserId);
 
-        String imageKey = normalizeStoredImageReference(request.imageUrl());
+        String imageKey = request.imageUrl() == null
+            ? resolveStoredImageReference(existing)
+            : normalizeStoredImageReference(request.imageUrl());
         Post updated = postMapper.updatePost(postId, request.content(), imageKey, null);
         if (updated == null) {
             throw new IllegalStateException("Unable to update post.");
