@@ -34,14 +34,14 @@ function shouldAllowLeave() {
   return window.confirm(leaveConfirmMessage);
 }
 
-async function onLogin(phoneNumber: string, password: string) {
+async function onLogin(loginId: string, password: string) {
   loginSubmitting.value = true;
   try {
-    await auth.signIn(phoneNumber, password);
+    await auth.signIn(loginId, password);
     allowDirectLeave.value = true;
     await router.push('/');
   } catch {
-    loginFormRef.value?.setError('手機號碼或密碼錯誤，請再試一次。');
+    loginFormRef.value?.setError('手機號碼 / Email 或密碼錯誤，請再試一次。');
   } finally {
     loginSubmitting.value = false;
   }

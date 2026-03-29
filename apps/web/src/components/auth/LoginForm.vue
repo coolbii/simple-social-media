@@ -11,13 +11,13 @@ const props = withDefaults(
 );
 
 const emit = defineEmits<{
-  submit: [phoneNumber: string, password: string];
+  submit: [loginId: string, password: string];
 }>();
 
-const phoneNumber = ref('');
+const loginId = ref('');
 const password = ref('');
 const error = ref('');
-const isDirty = computed(() => phoneNumber.value.trim().length > 0 || password.value.length > 0);
+const isDirty = computed(() => loginId.value.trim().length > 0 || password.value.length > 0);
 
 defineExpose({
   setError: (msg: string) => {
@@ -31,19 +31,19 @@ function handleSubmit() {
   if (props.loading) {
     return;
   }
-  emit('submit', phoneNumber.value, password.value);
+  emit('submit', loginId.value, password.value);
 }
 </script>
 
 <template>
   <form class="auth-form" @submit.prevent="handleSubmit">
     <label>
-      <span>手機號碼</span>
+      <span>手機號碼或 Email</span>
       <input
-        v-model="phoneNumber"
-        type="tel"
-        placeholder="0912345678"
-        autocomplete="tel"
+        v-model="loginId"
+        type="text"
+        placeholder="0912345678 或 you@example.com"
+        autocomplete="username"
         :disabled="props.loading"
         required
       />

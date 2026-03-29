@@ -220,15 +220,14 @@ public class AuthService {
     public LoginSession login(LoginRequest request) {
         evictExpiredRecords();
 
-        String phoneNumber = normalizePhoneNumber(request.phoneNumber());
-        RegisteredUser user = findByPhone(phoneNumber)
+        RegisteredUser user = findByLoginIdentifier(request.phoneNumber())
             .filter(candidate -> passwordEncoder.matches(request.password(), candidate.passwordHash()))
             .orElseThrow(
                 () ->
                     new ApiException(
                         HttpStatus.UNAUTHORIZED,
                         ErrorCode.AUTH_CREDENTIALS_INVALID,
-                        "Phone number or password is incorrect."
+                        "Phone number/email or password is incorrect."
                     )
             );
 
@@ -287,6 +286,13 @@ public class AuthService {
         return Optional.ofNullable(userMapper.findByPhone(phoneNumber));
     }
 
+    private Optional<RegisteredUser> findByLoginIdentifier(String loginIdentifier) {
+        if (looksLikeEmail(loginIdentifier)) {
+            return Optional.ofNullable(userMapper.findByEmail(loginIdentifier.trim()));
+        }
+        return findByPhone(normalizePhoneNumber(loginIdentifier));
+    }
+
     private UserSummary toSummary(RegisteredUser user) {
         return new UserSummary(user.id(), user.userName(), user.phoneNumber());
     }
@@ -333,6 +339,10 @@ public class AuthService {
         }
 
         return normalized;
+    }
+
+    private static boolean looksLikeEmail(String value) {
+        return value != null && value.contains("@");
     }
 
     private void evictExpiredRecords() {

@@ -16,6 +16,24 @@ public interface UserMapper {
 
     @Select(
         """
+        SELECT
+            id,
+            phone_number AS phoneNumber,
+            user_name AS userName,
+            email,
+            password_hash AS passwordHash,
+            cover_image_url AS coverImageUrl,
+            biography
+        FROM users
+        WHERE deleted_at IS NULL
+          AND LOWER(email) = LOWER(#{email})
+        LIMIT 1
+        """
+    )
+    RegisteredUser findByEmail(@Param("email") String email);
+
+    @Select(
+        """
         CALL sp_register_user(
             #{phoneNumber},
             #{userName},
