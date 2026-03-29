@@ -8,7 +8,7 @@ fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DEPLOY_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
-HEALTH_URL="${HEALTH_URL:-http://127.0.0.1:8080/actuator/health}"
+HEALTH_URL="${HEALTH_URL:-http://127.0.0.1:18081/actuator/health}"
 HEALTH_TIMEOUT_SECONDS="${HEALTH_TIMEOUT_SECONDS:-60}"
 
 cd "${DEPLOY_DIR}"
