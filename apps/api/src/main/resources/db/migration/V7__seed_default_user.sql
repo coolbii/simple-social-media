@@ -6,16 +6,15 @@ INSERT INTO users (
   cover_image_key,
   cover_image_url,
   biography
-) VALUES
-  (
-    '+886912345678',
-    'Brian',
-    'brian@example.com',
-    '$2a$10$Kr1RgL2pV.Ush5cCeznto.1tL3WuTsyWhFYm8PUKQZVhpSi8SJ.6G',
-    'cover-images/brian-cover.png',
-    'https://example-bucket.s3.amazonaws.com/cover-images/brian-cover.png',
-    'Seed user for the social media scaffold.'
-  )
+) VALUES (
+  '+886912345678',
+  'Brian',
+  'brian@example.com',
+  '$2a$10$Kr1RgL2pV.Ush5cCeznto.1tL3WuTsyWhFYm8PUKQZVhpSi8SJ.6G',
+  'cover-images/brian-cover.png',
+  'https://example-bucket.s3.amazonaws.com/cover-images/brian-cover.png',
+  'Seed user for the social media scaffold.'
+)
 ON DUPLICATE KEY UPDATE
   user_name = VALUES(user_name),
   email = VALUES(email),
