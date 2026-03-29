@@ -139,7 +139,7 @@ docker compose -f docker-compose.db.yml ps
 
 ## 備註
 
-- 後端功能服務目前仍有部分是 in-memory scaffold，DB-backed 的 MyBatis 服務會逐步遷移。
+- Auth 驗證狀態（phone verification request / registration token）與 posts/comments/session token 皆已 DB-backed。
 - `dev` profile 已啟用 JDBC/MyBatis auto-configuration；`DB/` 下的 SQL 仍是 schema 與 procedures 的唯一來源。
 - Backend 啟動後可於 `/swagger-ui/index.html` 使用 Swagger UI。
 - 目前尚未加入 CI/CD Dockerfile，此項目刻意延後處理。

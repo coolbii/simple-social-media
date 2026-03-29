@@ -6,10 +6,8 @@ import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.HexFormat;
-import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Pattern;
 
 import com.example.social.auth.dto.LoginRequest;
@@ -22,14 +20,17 @@ import com.example.social.auth.dto.SendCodeResponse;
 import com.example.social.auth.dto.UserSummary;
 import com.example.social.auth.dto.VerifyCodeRequest;
 import com.example.social.auth.dto.VerifyCodeResponse;
+import com.example.social.auth.mapper.AuthVerificationMapper;
 import com.example.social.auth.mapper.RefreshTokenMapper;
 import com.example.social.auth.mapper.UserMapper;
+import com.example.social.auth.model.PhoneVerificationRequestRecord;
 import com.example.social.auth.model.RefreshTokenSession;
 import com.example.social.auth.model.RegisteredUser;
+import com.example.social.auth.model.RegistrationTokenRecord;
 import com.example.social.common.exception.ApiException;
 import com.example.social.common.exception.ErrorCode;
-import org.springframework.dao.DuplicateKeyException;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -42,35 +43,32 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final UserMapper userMapper;
     private final RefreshTokenMapper refreshTokenMapper;
+    private final AuthVerificationMapper authVerificationMapper;
     private final SmsVerificationProvider smsVerificationProvider;
-    private final long refreshTokenTtlSeconds;
-    private final long registrationTokenTtlSeconds;
-    private final int otpMaxAttempts;
-    private final Map<String, VerificationRequestRecord> verificationRequestsByPhone =
-        new ConcurrentHashMap<>();
-    private final Map<String, RegistrationTokenRecord> registrationTokens = new ConcurrentHashMap<>();
+    @Value("${app.auth.sms.provider:mock}")
+    private String smsProviderName;
+    @Value("${app.auth.refresh-token-ttl-seconds:2592000}")
+    private long refreshTokenTtlSeconds;
+    @Value("${app.auth.registration-token-ttl-seconds:600}")
+    private long registrationTokenTtlSeconds;
+    @Value("${app.auth.otp.max-attempts:5}")
+    private int otpMaxAttempts;
 
     public AuthService(
         PasswordEncoder passwordEncoder,
         UserMapper userMapper,
         RefreshTokenMapper refreshTokenMapper,
-        SmsVerificationProvider smsVerificationProvider,
-        @Value("${app.auth.refresh-token-ttl-seconds:2592000}") long refreshTokenTtlSeconds,
-        @Value("${app.auth.registration-token-ttl-seconds:600}") long registrationTokenTtlSeconds,
-        @Value("${app.auth.otp.max-attempts:5}") int otpMaxAttempts
+        AuthVerificationMapper authVerificationMapper,
+        SmsVerificationProvider smsVerificationProvider
     ) {
         this.passwordEncoder = passwordEncoder;
         this.userMapper = userMapper;
         this.refreshTokenMapper = refreshTokenMapper;
+        this.authVerificationMapper = authVerificationMapper;
         this.smsVerificationProvider = smsVerificationProvider;
-        this.refreshTokenTtlSeconds = refreshTokenTtlSeconds;
-        this.registrationTokenTtlSeconds = registrationTokenTtlSeconds;
-        this.otpMaxAttempts = otpMaxAttempts;
     }
 
     public SendCodeResponse sendCode(SendCodeRequest request) {
-        evictExpiredRecords();
-
         String phoneNumber = normalizePhoneNumber(request.phoneNumber());
         if (findByPhone(phoneNumber).isPresent()) {
             throw new ApiException(
@@ -85,26 +83,24 @@ public class AuthService {
             ? Instant.now().plus(5, ChronoUnit.MINUTES)
             : verification.expiresAt();
 
-        verificationRequestsByPhone.put(
+        Long verificationRequestId = authVerificationMapper.createPhoneVerificationRequest(
             phoneNumber,
-            new VerificationRequestRecord(
-                phoneNumber,
-                verification.requestId(),
-                expiresAt,
-                "pending",
-                0
-            )
+            smsProviderName,
+            verification.requestId(),
+            verification.status(),
+            expiresAt
         );
+        if (verificationRequestId == null) {
+            throw new IllegalStateException("Unable to persist phone verification request.");
+        }
 
         long expiresIn = Math.max(1, Instant.now().until(expiresAt, ChronoUnit.SECONDS));
         return new SendCodeResponse(verification.requestId(), expiresIn);
     }
 
     public VerifyCodeResponse verifyCode(VerifyCodeRequest request) {
-        evictExpiredRecords();
-
         String phoneNumber = normalizePhoneNumber(request.phoneNumber());
-        VerificationRequestRecord verification = verificationRequestsByPhone.get(phoneNumber);
+        PhoneVerificationRequestRecord verification = authVerificationMapper.findLatestVerificationByPhone(phoneNumber);
         if (verification == null) {
             throw new ApiException(
                 HttpStatus.NOT_FOUND,
@@ -121,23 +117,15 @@ public class AuthService {
             );
         }
 
-        if (verification.attempts() >= otpMaxAttempts) {
+        if (verification.attemptCount() >= otpMaxAttempts) {
             throw tooManyVerifyAttempts();
         }
 
         VerificationCheckResult result = smsVerificationProvider.verifyCode(phoneNumber, request.code());
         if (!result.approved()) {
-            int nextAttempts = verification.attempts() + 1;
-            verificationRequestsByPhone.put(
-                phoneNumber,
-                new VerificationRequestRecord(
-                    verification.phoneNumber(),
-                    verification.requestId(),
-                    verification.expiresAt(),
-                    nextAttempts >= otpMaxAttempts ? "locked" : result.status(),
-                    nextAttempts
-                )
-            );
+            int nextAttempts = verification.attemptCount() + 1;
+            String nextStatus = nextAttempts >= otpMaxAttempts ? "locked" : result.status();
+            authVerificationMapper.updateVerificationStatus(verification.id(), nextStatus, nextAttempts);
 
             if (nextAttempts >= otpMaxAttempts) {
                 throw tooManyVerifyAttempts();
@@ -150,22 +138,28 @@ public class AuthService {
             );
         }
 
-        verificationRequestsByPhone.remove(phoneNumber);
+        authVerificationMapper.markVerificationApproved(verification.id());
+
         String registrationToken = "reg_" + UUID.randomUUID();
-        Instant expiresAt = Instant.now().plusSeconds(registrationTokenTtlSeconds);
-        registrationTokens.put(
-            registrationToken,
-            new RegistrationTokenRecord(registrationToken, phoneNumber, expiresAt, null)
+        Instant registrationTokenExpiresAt = Instant.now().plusSeconds(registrationTokenTtlSeconds);
+        Long registrationTokenId = authVerificationMapper.insertRegistrationToken(
+            phoneNumber,
+            sha256(registrationToken),
+            verification.id(),
+            registrationTokenExpiresAt
         );
+        if (registrationTokenId == null) {
+            throw new IllegalStateException("Unable to persist registration token.");
+        }
 
         return new VerifyCodeResponse(registrationToken, registrationTokenTtlSeconds);
     }
 
     public RegisterResponse register(RegisterRequest request) {
-        evictExpiredRecords();
-
         String phoneNumber = normalizePhoneNumber(request.phoneNumber());
-        RegistrationTokenRecord token = registrationTokens.get(request.registrationToken());
+        RegistrationTokenRecord token = authVerificationMapper.findRegistrationTokenByHash(
+            sha256(request.registrationToken())
+        );
         if (token == null || token.consumedAt() != null || Instant.now().isAfter(token.expiresAt())) {
             throw new ApiException(
                 HttpStatus.UNAUTHORIZED,
@@ -210,16 +204,19 @@ public class AuthService {
             );
         }
 
-        registrationTokens.put(
-            token.token(),
-            new RegistrationTokenRecord(token.token(), token.phoneNumber(), token.expiresAt(), Instant.now())
-        );
+        Boolean consumed = authVerificationMapper.consumeRegistrationToken(token.id());
+        if (consumed == null || !consumed) {
+            throw new ApiException(
+                HttpStatus.UNAUTHORIZED,
+                ErrorCode.AUTH_REGISTRATION_TOKEN_INVALID,
+                "Registration token is invalid."
+            );
+        }
+
         return new RegisterResponse(userId);
     }
 
     public LoginSession login(LoginRequest request) {
-        evictExpiredRecords();
-
         RegisteredUser user = findByLoginIdentifier(request.phoneNumber())
             .filter(candidate -> passwordEncoder.matches(request.password(), candidate.passwordHash()))
             .orElseThrow(
@@ -239,8 +236,6 @@ public class AuthService {
     }
 
     public void logout(String rawSessionToken) {
-        evictExpiredRecords();
-
         if (rawSessionToken == null || rawSessionToken.isBlank()) {
             return;
         }
@@ -264,7 +259,6 @@ public class AuthService {
     }
 
     public AuthenticatedUser requireAuthenticatedUser(String rawSessionToken) {
-        evictExpiredRecords();
         RefreshTokenSession session = requireValidSession(rawSessionToken);
         RegisteredUser user = requireExistingUser(session.userId());
         return new AuthenticatedUser(
@@ -364,14 +358,6 @@ public class AuthService {
         return value != null && value.contains("@");
     }
 
-    private void evictExpiredRecords() {
-        Instant now = Instant.now();
-        verificationRequestsByPhone.entrySet().removeIf(entry -> now.isAfter(entry.getValue().expiresAt()));
-        registrationTokens.entrySet().removeIf(
-            entry -> now.isAfter(entry.getValue().expiresAt()) || entry.getValue().consumedAt() != null
-        );
-    }
-
     private ApiException tooManyVerifyAttempts() {
         return new ApiException(
             HttpStatus.TOO_MANY_REQUESTS,
@@ -399,23 +385,6 @@ public class AuthService {
         String email,
         String coverImageUrl,
         String biography
-    ) {
-    }
-
-    private record VerificationRequestRecord(
-        String phoneNumber,
-        String requestId,
-        Instant expiresAt,
-        String status,
-        int attempts
-    ) {
-    }
-
-    private record RegistrationTokenRecord(
-        String token,
-        String phoneNumber,
-        Instant expiresAt,
-        Instant consumedAt
     ) {
     }
 }
