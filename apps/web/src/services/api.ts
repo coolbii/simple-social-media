@@ -1,4 +1,5 @@
 import {
+  ApiError,
   AuthService,
   CommentsService,
   OpenAPI,
@@ -16,7 +17,9 @@ import {
   type PostResponse,
   type RegisterRequest,
   type RegisterResponse,
+  type SendCodeResponse,
   type UserSummary as ApiUserSummary,
+  type VerifyCodeResponse,
 } from '@simple-social-media/api-contract';
 import { resolveApiBaseUrl } from '@simple-social-media/utils';
 import type { CommentItem, LoginResponse, PostItem, UserSummary } from '../types';
@@ -24,6 +27,12 @@ import type { CommentItem, LoginResponse, PostItem, UserSummary } from '../types
 OpenAPI.BASE = resolveApiBaseUrl();
 OpenAPI.WITH_CREDENTIALS = true;
 OpenAPI.CREDENTIALS = 'include';
+
+interface ApiErrorBody {
+  error?: {
+    message?: string;
+  };
+}
 
 function unwrap<T extends { data?: unknown }>(response: T): NonNullable<T['data']> {
   if (response.data === undefined || response.data === null) {
@@ -85,17 +94,38 @@ async function withAuth<T>(request: () => Promise<{ data?: T }>): Promise<T> {
   return unwrap(await request());
 }
 
+function rethrowApiError(error: unknown): never {
+  if (error instanceof ApiError) {
+    const serverMessage = (error.body as ApiErrorBody | undefined)?.error?.message;
+    if (typeof serverMessage === 'string' && serverMessage.trim().length > 0) {
+      throw new Error(serverMessage);
+    }
+  }
+  if (error instanceof Error) {
+    throw error;
+  }
+  throw new Error('Request failed.');
+}
+
 export async function register(payload: RegisterRequest): Promise<RegisterResponse> {
-  const response = await AuthService.authRegister({ requestBody: payload });
-  const data = unwrap<ApiResponseRegisterResponse>(response);
-  return {
-    userId: required(data.userId, 'register.data.userId'),
-  };
+  try {
+    const response = await AuthService.authRegister({ requestBody: payload });
+    const data = unwrap<ApiResponseRegisterResponse>(response);
+    return {
+      userId: required(data.userId, 'register.data.userId'),
+    };
+  } catch (error) {
+    rethrowApiError(error);
+  }
 }
 
 export async function login(payload: LoginRequest): Promise<LoginResponse> {
-  const response = await AuthService.authLogin({ requestBody: payload });
-  return toLoginResponse(unwrap<ApiResponseLoginResponse>(response));
+  try {
+    const response = await AuthService.authLogin({ requestBody: payload });
+    return toLoginResponse(unwrap<ApiResponseLoginResponse>(response));
+  } catch (error) {
+    rethrowApiError(error);
+  }
 }
 
 export async function logout() {
@@ -104,6 +134,24 @@ export async function logout() {
   return {
     success: required(data.success, 'logout.data.success'),
   };
+}
+
+export async function sendCode(phoneNumber: string): Promise<SendCodeResponse> {
+  try {
+    const response = await AuthService.authSendCode({ requestBody: { phoneNumber } });
+    return unwrap(response);
+  } catch (error) {
+    rethrowApiError(error);
+  }
+}
+
+export async function verifyCode(phoneNumber: string, code: string): Promise<VerifyCodeResponse> {
+  try {
+    const response = await AuthService.authVerifyCode({ requestBody: { phoneNumber, code } });
+    return unwrap(response);
+  } catch (error) {
+    rethrowApiError(error);
+  }
 }
 
 export async function getCurrentUser(): Promise<UserSummary> {
