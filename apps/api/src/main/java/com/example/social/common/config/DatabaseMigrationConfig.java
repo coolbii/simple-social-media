@@ -4,6 +4,7 @@ import javax.sql.DataSource;
 
 import org.flywaydb.core.Flyway;
 import org.flywaydb.core.api.MigrationVersion;
+import org.flywaydb.core.api.output.MigrateResult;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -36,7 +37,7 @@ public class DatabaseMigrationConfig {
                 .baselineVersion(MigrationVersion.fromVersion(baselineVersion))
                 .load();
 
-            var result = flyway.migrate();
+            MigrateResult result = flyway.migrate();
             LOG.info(
                 "Flyway migration finished. Executed={}, InitialVersion={}, TargetVersion={}",
                 result.migrationsExecuted,
