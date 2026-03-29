@@ -251,24 +251,23 @@ public class AuthService {
     }
 
     public MeResponse me(String rawSessionToken) {
-        evictExpiredRecords();
-
-        if (rawSessionToken == null || rawSessionToken.isBlank()) {
-            throw unauthorized("Session is missing.");
-        }
-
-        RefreshTokenSession session = refreshTokenMapper.findByHash(sha256(rawSessionToken));
-        if (session == null || Instant.now().isAfter(session.expiresAt()) || session.revokedAt() != null) {
-            throw unauthorized("Session is invalid.");
-        }
-
-        long userId = session.userId();
-        RegisteredUser user = userMapper.findById(userId);
-        if (user == null) {
-            throw unauthorized("Session is invalid.");
-        }
+        AuthenticatedUser currentUser = requireAuthenticatedUser(rawSessionToken);
 
         return new MeResponse(
+            currentUser.id(),
+            currentUser.userName(),
+            currentUser.phoneNumber(),
+            currentUser.email(),
+            currentUser.coverImageUrl(),
+            currentUser.biography()
+        );
+    }
+
+    public AuthenticatedUser requireAuthenticatedUser(String rawSessionToken) {
+        evictExpiredRecords();
+        RefreshTokenSession session = requireValidSession(rawSessionToken);
+        RegisteredUser user = requireExistingUser(session.userId());
+        return new AuthenticatedUser(
             user.id(),
             user.userName(),
             user.phoneNumber(),
@@ -295,6 +294,26 @@ public class AuthService {
 
     private UserSummary toSummary(RegisteredUser user) {
         return new UserSummary(user.id(), user.userName(), user.phoneNumber());
+    }
+
+    private RefreshTokenSession requireValidSession(String rawSessionToken) {
+        if (rawSessionToken == null || rawSessionToken.isBlank()) {
+            throw unauthorized("Session is missing.");
+        }
+
+        RefreshTokenSession session = refreshTokenMapper.findByHash(sha256(rawSessionToken));
+        if (session == null || Instant.now().isAfter(session.expiresAt()) || session.revokedAt() != null) {
+            throw unauthorized("Session is invalid.");
+        }
+        return session;
+    }
+
+    private RegisteredUser requireExistingUser(long userId) {
+        RegisteredUser user = userMapper.findById(userId);
+        if (user == null) {
+            throw unauthorized("Session is invalid.");
+        }
+        return user;
     }
 
     private ApiException unauthorized(String message) {
@@ -371,6 +390,16 @@ public class AuthService {
     }
 
     public record LoginSession(LoginResponse response, String sessionToken) {
+    }
+
+    public record AuthenticatedUser(
+        long id,
+        String userName,
+        String phoneNumber,
+        String email,
+        String coverImageUrl,
+        String biography
+    ) {
     }
 
     private record VerificationRequestRecord(

@@ -29,8 +29,12 @@ public class CommentStreamService {
         for (SseEmitter emitter : emitters.getOrDefault(postId, new CopyOnWriteArrayList<>())) {
             try {
                 emitter.send(SseEmitter.event().name("comment.created").data(event));
-            } catch (IOException exception) {
-                emitter.completeWithError(exception);
+            } catch (IOException | IllegalStateException exception) {
+                try {
+                    emitter.completeWithError(exception);
+                } catch (IllegalStateException ignored) {
+                    // Emitter already completed; safe to ignore.
+                }
                 removeEmitter(postId, emitter);
             }
         }

@@ -10,6 +10,8 @@ import com.example.social.comment.model.Comment;
 import com.example.social.common.exception.ApiException;
 import com.example.social.common.exception.ErrorCode;
 import com.example.social.sse.service.CommentStreamService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 
@@ -17,6 +19,7 @@ import org.springframework.stereotype.Service;
 public class CommentService {
 
     private static final String DELETED_PLACEHOLDER = "Original reply is deleted.";
+    private static final Logger LOGGER = LoggerFactory.getLogger(CommentService.class);
 
     private final CommentMapper commentMapper;
     private final CommentStreamService commentStreamService;
@@ -47,7 +50,12 @@ public class CommentService {
 
         Comment created = requireCommentInPost(postId, commentId);
         CommentResponse response = toResponse(created);
-        commentStreamService.publish(postId, response);
+        try {
+            commentStreamService.publish(postId, response);
+        } catch (RuntimeException exception) {
+            // Comment persistence is the source of truth; SSE push is best-effort.
+            LOGGER.warn("Failed to publish comment stream event for post {}", postId, exception);
+        }
         return response;
     }
 
