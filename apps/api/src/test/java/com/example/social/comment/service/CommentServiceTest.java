@@ -19,6 +19,8 @@ import org.springframework.http.HttpStatus;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
@@ -93,6 +95,30 @@ class CommentServiceTest {
     }
 
     @Test
+    void listCommentsPage_shouldRejectNegativeOffset() {
+        ApiException exception = assertThrows(
+            ApiException.class,
+            () -> commentService.listCommentsPage(1L, null, -1, 5)
+        );
+
+        assertThat(exception.getStatus()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.VALIDATION_ERROR);
+        verify(commentMapper, never()).listCommentsPage(anyLong(), any(), anyBoolean(), anyInt(), anyInt());
+    }
+
+    @Test
+    void listCommentsPage_shouldRejectLimitOutOfRange() {
+        ApiException exception = assertThrows(
+            ApiException.class,
+            () -> commentService.listCommentsPage(1L, null, 0, 99)
+        );
+
+        assertThat(exception.getStatus()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.VALIDATION_ERROR);
+        verify(commentMapper, never()).listCommentsPage(anyLong(), any(), anyBoolean(), anyInt(), anyInt());
+    }
+
+    @Test
     void createComment_shouldCreateReplyWhenParentExists() {
         when(commentMapper.getCommentById(1L))
             .thenReturn(comment(1L, 1L, 1L, "Brian", null, "parent", "2026-03-29T09:00:00Z", null));
@@ -157,6 +183,18 @@ class CommentServiceTest {
     }
 
     @Test
+    void deleteComment_shouldRejectCommentFromDifferentPost() {
+        when(commentMapper.getCommentById(1L))
+            .thenReturn(comment(1L, 2L, 1L, "Brian", null, "active", "2026-03-29T09:00:00Z", null));
+
+        ApiException exception = assertThrows(ApiException.class, () -> commentService.deleteComment(1L, 1L, 1L));
+
+        assertThat(exception.getStatus()).isEqualTo(HttpStatus.NOT_FOUND);
+        assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.COMMENT_NOT_FOUND);
+        verify(commentMapper, never()).softDeleteComment(anyLong());
+    }
+
+    @Test
     void updateComment_shouldUpdateOwnedComment() {
         when(commentMapper.getCommentById(5L))
             .thenReturn(comment(5L, 1L, 2L, "Alice", null, "before", "2026-03-29T09:00:00Z", null));
@@ -196,6 +234,21 @@ class CommentServiceTest {
 
         assertThat(exception.getStatus()).isEqualTo(HttpStatus.BAD_REQUEST);
         assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.VALIDATION_ERROR);
+        verify(commentMapper, never()).updateComment(anyLong(), any());
+    }
+
+    @Test
+    void updateComment_shouldRejectCommentFromDifferentPost() {
+        when(commentMapper.getCommentById(5L))
+            .thenReturn(comment(5L, 2L, 2L, "Alice", null, "before", "2026-03-29T09:00:00Z", null));
+
+        ApiException exception = assertThrows(
+            ApiException.class,
+            () -> commentService.updateComment(1L, 5L, new UpdateCommentRequest("after"), 2L)
+        );
+
+        assertThat(exception.getStatus()).isEqualTo(HttpStatus.NOT_FOUND);
+        assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.COMMENT_NOT_FOUND);
         verify(commentMapper, never()).updateComment(anyLong(), any());
     }
 
