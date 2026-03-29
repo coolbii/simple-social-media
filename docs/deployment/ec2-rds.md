@@ -62,6 +62,16 @@ Repository secrets for `.github/workflows/cd-ec2.yml`:
 
 If `EC2_SSH_KNOWN_HOSTS` is absent, workflow falls back to `ssh-keyscan` (less strict).
 
+DB bootstrap secrets for `.github/workflows/bootstrap-db.yml`:
+
+- `RDS_HOST`
+- `RDS_PORT`
+- `RDS_ADMIN_USER`
+- `RDS_ADMIN_PASSWORD`
+- `RDS_APP_USER`
+- `RDS_APP_PASSWORD`
+- `RDS_DATABASE` (optional, defaults to `simple_social_media`)
+
 ## 4. CI pipeline
 
 `.github/workflows/ci.yml` runs on PR and main:
@@ -86,6 +96,8 @@ Deployment metadata is written to:
 
 - `/opt/simple-social-media/deploy/.env.images.current`
 - `/opt/simple-social-media/deploy/.env.images.previous`
+
+Before first deploy, run `Bootstrap DB` workflow once to initialize DB/app user via GitHub Actions.
 
 ## 6. Rollback
 

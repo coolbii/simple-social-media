@@ -1,0 +1,15 @@
+-- Rendered and executed by .github/workflows/bootstrap-db.yml
+-- This file is for reference/documentation only.
+
+CREATE DATABASE IF NOT EXISTS `__RDS_DATABASE__`
+  CHARACTER SET utf8mb4
+  COLLATE utf8mb4_unicode_ci;
+
+CREATE USER IF NOT EXISTS '__RDS_APP_USER__'@'%' IDENTIFIED BY '__RDS_APP_PASSWORD__';
+
+GRANT SELECT, INSERT, UPDATE, DELETE,
+      CREATE, ALTER, DROP, INDEX, REFERENCES,
+      CREATE ROUTINE, ALTER ROUTINE, EXECUTE
+ON `__RDS_DATABASE__`.* TO '__RDS_APP_USER__'@'%';
+
+FLUSH PRIVILEGES;
