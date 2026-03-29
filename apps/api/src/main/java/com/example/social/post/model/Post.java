@@ -7,6 +7,7 @@ public record Post(
     long userId,
     String userName,
     String content,
+    String imageKey,
     String imageUrl,
     Instant createdAt,
     Instant updatedAt

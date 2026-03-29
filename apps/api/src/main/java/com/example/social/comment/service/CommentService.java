@@ -1,74 +1,76 @@
 package com.example.social.comment.service;
 
-import java.time.Instant;
-import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicLong;
 
 import com.example.social.comment.dto.CommentResponse;
 import com.example.social.comment.dto.CreateCommentRequest;
+import com.example.social.comment.mapper.CommentMapper;
 import com.example.social.comment.model.Comment;
+import com.example.social.common.exception.ApiException;
+import com.example.social.common.exception.ErrorCode;
 import com.example.social.sse.service.CommentStreamService;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 
 @Service
 public class CommentService {
 
-    private final CommentStreamService commentStreamService;
-    private final AtomicLong commentSequence = new AtomicLong(2);
-    private final Map<Long, List<Comment>> commentsByPostId = new ConcurrentHashMap<>();
+    private static final String DELETED_PLACEHOLDER = "Original reply is deleted.";
 
-    public CommentService(CommentStreamService commentStreamService) {
+    private final CommentMapper commentMapper;
+    private final CommentStreamService commentStreamService;
+
+    public CommentService(CommentMapper commentMapper, CommentStreamService commentStreamService) {
+        this.commentMapper = commentMapper;
         this.commentStreamService = commentStreamService;
-        seedComments();
     }
 
     public List<CommentResponse> listComments(long postId) {
-        return commentsByPostId.getOrDefault(postId, List.of())
+        return commentMapper.listCommentsByPost(postId)
             .stream()
             .sorted(Comparator.comparing(Comment::createdAt))
             .map(this::toResponse)
             .toList();
     }
 
-    public CommentResponse createComment(long postId, CreateCommentRequest request) {
-        Comment comment = new Comment(
-            commentSequence.getAndIncrement(),
-            postId,
-            1L,
-            "Brian",
-            request.content(),
-            Instant.now()
-        );
-        commentsByPostId.computeIfAbsent(postId, ignored -> new ArrayList<>()).add(comment);
-        CommentResponse response = toResponse(comment);
+    public CommentResponse createComment(long postId, CreateCommentRequest request, long actorUserId) {
+        Long parentCommentId = request.parentCommentId();
+        if (parentCommentId != null) {
+            ensureParentCommentExists(postId, parentCommentId);
+        }
+
+        Long commentId = commentMapper.createComment(postId, actorUserId, parentCommentId, request.content());
+        if (commentId == null) {
+            throw new IllegalStateException("Unable to create comment.");
+        }
+
+        Comment created = requireCommentInPost(postId, commentId);
+        CommentResponse response = toResponse(created);
         commentStreamService.publish(postId, response);
         return response;
     }
 
-    public void deleteByPostId(long postId) {
-        commentsByPostId.remove(postId);
+    public CommentResponse deleteComment(long postId, long commentId, long actorUserId) {
+        Comment existing = requireCommentInPost(postId, commentId);
+        if (existing.userId() != actorUserId) {
+            throw new ApiException(
+                HttpStatus.FORBIDDEN,
+                ErrorCode.AUTH_UNAUTHORIZED,
+                "You can only delete your own comment."
+            );
+        }
+
+        Comment deleted = commentMapper.softDeleteComment(commentId);
+        if (deleted == null) {
+            throw new IllegalStateException("Unable to delete comment.");
+        }
+
+        return toResponse(deleted);
     }
 
-    private void seedComments() {
-        commentsByPostId.put(
-            1L,
-            new ArrayList<>(
-                List.of(
-                    new Comment(
-                        1L,
-                        1L,
-                        1L,
-                        "Brian",
-                        "This comment is pushed to the Vue detail page over SSE when new comments are added.",
-                        Instant.parse("2026-03-28T11:30:00Z")
-                    )
-                )
-            )
-        );
+    public void deleteByPostId(long postId) {
+        // No-op. Database-side post deletion procedure already soft-deletes linked comments.
     }
 
     private CommentResponse toResponse(Comment comment) {
@@ -77,8 +79,29 @@ public class CommentService {
             comment.postId(),
             comment.userId(),
             comment.userName(),
-            comment.content(),
-            comment.createdAt()
+            comment.parentCommentId(),
+            comment.deletedAt() == null ? comment.content() : DELETED_PLACEHOLDER,
+            comment.createdAt(),
+            comment.deletedAt() != null
         );
+    }
+
+    private void ensureParentCommentExists(long postId, long parentCommentId) {
+        Comment parent = commentMapper.getCommentById(parentCommentId);
+        if (parent == null || parent.postId() != postId) {
+            throw new ApiException(
+                HttpStatus.BAD_REQUEST,
+                ErrorCode.COMMENT_NOT_FOUND,
+                "Parent comment not found for this post."
+            );
+        }
+    }
+
+    private Comment requireCommentInPost(long postId, long commentId) {
+        Comment comment = commentMapper.getCommentById(commentId);
+        if (comment == null || comment.postId() != postId) {
+            throw new ApiException(HttpStatus.NOT_FOUND, ErrorCode.COMMENT_NOT_FOUND, "Comment not found.");
+        }
+        return comment;
     }
 }

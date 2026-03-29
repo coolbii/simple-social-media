@@ -2,6 +2,7 @@ package com.example.social.post.controller;
 
 import java.util.List;
 
+import com.example.social.auth.service.AuthService;
 import com.example.social.common.response.ApiResponse;
 import com.example.social.post.dto.CreatePostRequest;
 import com.example.social.post.dto.DeletePostResponse;
@@ -10,7 +11,10 @@ import com.example.social.post.dto.UpdatePostRequest;
 import com.example.social.post.service.PostService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.Cookie;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -26,9 +30,17 @@ import org.springframework.web.bind.annotation.RestController;
 public class PostController {
 
     private final PostService postService;
+    private final AuthService authService;
+    private final String sessionCookieName;
 
-    public PostController(PostService postService) {
+    public PostController(
+        PostService postService,
+        AuthService authService,
+        @Value("${app.auth.session-cookie-name:sessionId}") String sessionCookieName
+    ) {
         this.postService = postService;
+        this.authService = authService;
+        this.sessionCookieName = sessionCookieName;
     }
 
     @GetMapping
@@ -38,9 +50,15 @@ public class PostController {
     }
 
     @PostMapping
-    @Operation(operationId = "createPost", summary = "Create a post for the scaffold user.")
-    public ApiResponse<PostResponse> createPost(@Valid @RequestBody CreatePostRequest request) {
-        return ApiResponse.ok(postService.createPost(request));
+    @Operation(operationId = "createPost", summary = "Create a post for the authenticated user.")
+    public ApiResponse<PostResponse> createPost(
+        HttpServletRequest servletRequest,
+        @Valid @RequestBody CreatePostRequest request
+    ) {
+        AuthService.AuthenticatedUser currentUser = authService.requireAuthenticatedUser(
+            extractSessionToken(servletRequest)
+        );
+        return ApiResponse.ok(postService.createPost(request, currentUser.id()));
     }
 
     @GetMapping("/{postId}")
@@ -53,15 +71,40 @@ public class PostController {
     @Operation(operationId = "updatePost", summary = "Update an existing post.")
     public ApiResponse<PostResponse> updatePost(
         @PathVariable long postId,
+        HttpServletRequest servletRequest,
         @Valid @RequestBody UpdatePostRequest request
     ) {
-        return ApiResponse.ok(postService.updatePost(postId, request));
+        AuthService.AuthenticatedUser currentUser = authService.requireAuthenticatedUser(
+            extractSessionToken(servletRequest)
+        );
+        return ApiResponse.ok(postService.updatePost(postId, request, currentUser.id()));
     }
 
     @DeleteMapping("/{postId}")
     @Operation(operationId = "deletePost", summary = "Delete a post and its comments.")
-    public ApiResponse<DeletePostResponse> deletePost(@PathVariable long postId) {
-        postService.deletePost(postId);
+    public ApiResponse<DeletePostResponse> deletePost(
+        @PathVariable long postId,
+        HttpServletRequest servletRequest
+    ) {
+        AuthService.AuthenticatedUser currentUser = authService.requireAuthenticatedUser(
+            extractSessionToken(servletRequest)
+        );
+        postService.deletePost(postId, currentUser.id());
         return ApiResponse.ok(new DeletePostResponse(true));
+    }
+
+    private String extractSessionToken(HttpServletRequest request) {
+        Cookie[] cookies = request.getCookies();
+        if (cookies == null || cookies.length == 0) {
+            return "";
+        }
+
+        for (Cookie cookie : cookies) {
+            if (sessionCookieName.equals(cookie.getName())) {
+                return cookie.getValue();
+            }
+        }
+
+        return "";
     }
 }

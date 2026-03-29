@@ -7,7 +7,9 @@ public record Comment(
     long postId,
     long userId,
     String userName,
+    Long parentCommentId,
     String content,
-    Instant createdAt
+    Instant createdAt,
+    Instant deletedAt
 ) {
 }
