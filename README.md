@@ -108,6 +108,15 @@ docker compose -f docker-compose.db.yml ps
 
 本專案不保存 OpenAPI snapshot。`openapi-typescript-codegen` 會直接從執行中的 Springdoc endpoint（`http://127.0.0.1:8080/v3/api-docs`）產生。
 
+## 留言 SSE 策略
+
+留言即時串流目前只推送 `comment.created` 事件。
+
+- 新增留言：透過 SSE 即時推送到訂閱中的客戶端
+- 編輯/刪除留言：採 pull 一致性（本地操作立即更新，其他客戶端於重新載入或下次查詢看到最新狀態）
+
+此策略是刻意取捨，用於降低高併發下的 SSE 事件量與推播壓力。
+
 ## 圖片上傳策略（S3 Presigned URL）
 
 建議採用「前端直傳 S3 + 後端僅保存 metadata」模式：
