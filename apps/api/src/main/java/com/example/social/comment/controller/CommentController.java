@@ -5,6 +5,7 @@ import java.util.List;
 import com.example.social.auth.service.AuthService;
 import com.example.social.comment.dto.CommentResponse;
 import com.example.social.comment.dto.CreateCommentRequest;
+import com.example.social.comment.dto.UpdateCommentRequest;
 import com.example.social.comment.service.CommentService;
 import com.example.social.common.response.ApiResponse;
 import io.swagger.v3.oas.annotations.Operation;
@@ -17,6 +18,7 @@ import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
@@ -70,6 +72,20 @@ public class CommentController {
             extractSessionToken(servletRequest)
         );
         return ApiResponse.ok(commentService.deleteComment(postId, commentId, currentUser.id()));
+    }
+
+    @PutMapping("/{commentId}")
+    @Operation(operationId = "updateComment", summary = "Update a comment content.")
+    public ApiResponse<CommentResponse> updateComment(
+        @PathVariable long postId,
+        @PathVariable long commentId,
+        HttpServletRequest servletRequest,
+        @Valid @RequestBody UpdateCommentRequest request
+    ) {
+        AuthService.AuthenticatedUser currentUser = authService.requireAuthenticatedUser(
+            extractSessionToken(servletRequest)
+        );
+        return ApiResponse.ok(commentService.updateComment(postId, commentId, request, currentUser.id()));
     }
 
     private String extractSessionToken(HttpServletRequest request) {

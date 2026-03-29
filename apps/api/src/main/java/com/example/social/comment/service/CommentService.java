@@ -5,6 +5,7 @@ import java.util.List;
 
 import com.example.social.comment.dto.CommentResponse;
 import com.example.social.comment.dto.CreateCommentRequest;
+import com.example.social.comment.dto.UpdateCommentRequest;
 import com.example.social.comment.mapper.CommentMapper;
 import com.example.social.comment.model.Comment;
 import com.example.social.common.exception.ApiException;
@@ -75,6 +76,30 @@ public class CommentService {
         }
 
         return toResponse(deleted);
+    }
+
+    public CommentResponse updateComment(long postId, long commentId, UpdateCommentRequest request, long actorUserId) {
+        Comment existing = requireCommentInPost(postId, commentId);
+        if (existing.userId() != actorUserId) {
+            throw new ApiException(
+                HttpStatus.FORBIDDEN,
+                ErrorCode.AUTH_UNAUTHORIZED,
+                "You can only edit your own comment."
+            );
+        }
+        if (existing.deletedAt() != null) {
+            throw new ApiException(
+                HttpStatus.BAD_REQUEST,
+                ErrorCode.VALIDATION_ERROR,
+                "Deleted comment cannot be edited."
+            );
+        }
+
+        Comment updated = commentMapper.updateComment(commentId, request.content());
+        if (updated == null) {
+            throw new IllegalStateException("Unable to update comment.");
+        }
+        return toResponse(updated);
     }
 
     public void deleteByPostId(long postId) {

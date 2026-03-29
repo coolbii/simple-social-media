@@ -2,6 +2,7 @@ DROP PROCEDURE IF EXISTS sp_create_comment;
 DROP PROCEDURE IF EXISTS sp_list_comments_by_post;
 DROP PROCEDURE IF EXISTS sp_get_comment_by_id;
 DROP PROCEDURE IF EXISTS sp_soft_delete_comment;
+DROP PROCEDURE IF EXISTS sp_update_comment;
 
 DELIMITER $$
 
@@ -54,6 +55,21 @@ BEGIN
   UPDATE comments
   SET
     deleted_at = NOW(),
+    updated_at = NOW()
+  WHERE id = p_comment_id
+    AND deleted_at IS NULL;
+
+  CALL sp_get_comment_by_id(p_comment_id);
+END $$
+
+CREATE PROCEDURE sp_update_comment(
+  IN p_comment_id BIGINT,
+  IN p_content TEXT
+)
+BEGIN
+  UPDATE comments
+  SET
+    content = p_content,
     updated_at = NOW()
   WHERE id = p_comment_id
     AND deleted_at IS NULL;

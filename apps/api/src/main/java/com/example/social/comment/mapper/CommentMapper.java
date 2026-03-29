@@ -71,6 +71,21 @@ public interface CommentMapper {
             @Arg(column = "deleted_at", javaType = java.time.Instant.class)
         }
     )
+    @Select("CALL sp_update_comment(#{commentId}, #{content})")
+    Comment updateComment(@Param("commentId") long commentId, @Param("content") String content);
+
+    @ConstructorArgs(
+        {
+            @Arg(column = "id", javaType = long.class),
+            @Arg(column = "post_id", javaType = long.class),
+            @Arg(column = "user_id", javaType = long.class),
+            @Arg(column = "user_name", javaType = String.class),
+            @Arg(column = "parent_comment_id", javaType = Long.class),
+            @Arg(column = "content", javaType = String.class),
+            @Arg(column = "created_at", javaType = java.time.Instant.class),
+            @Arg(column = "deleted_at", javaType = java.time.Instant.class)
+        }
+    )
     @Select("CALL sp_list_comments_by_post(#{postId})")
     List<Comment> listCommentsByPost(@Param("postId") long postId);
 }

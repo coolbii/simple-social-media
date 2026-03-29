@@ -5,6 +5,7 @@ import java.util.List;
 
 import com.example.social.comment.dto.CommentResponse;
 import com.example.social.comment.dto.CreateCommentRequest;
+import com.example.social.comment.dto.UpdateCommentRequest;
 import com.example.social.comment.mapper.CommentMapper;
 import com.example.social.comment.model.Comment;
 import com.example.social.common.exception.ApiException;
@@ -119,6 +120,49 @@ class CommentServiceTest {
         assertThat(exception.getStatus()).isEqualTo(HttpStatus.FORBIDDEN);
         assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.AUTH_UNAUTHORIZED);
         verify(commentMapper, never()).softDeleteComment(anyLong());
+    }
+
+    @Test
+    void updateComment_shouldUpdateOwnedComment() {
+        when(commentMapper.getCommentById(5L))
+            .thenReturn(comment(5L, 1L, 2L, "Alice", null, "before", "2026-03-29T09:00:00Z", null));
+        when(commentMapper.updateComment(5L, "after"))
+            .thenReturn(comment(5L, 1L, 2L, "Alice", null, "after", "2026-03-29T09:00:00Z", null));
+
+        CommentResponse updated = commentService.updateComment(1L, 5L, new UpdateCommentRequest("after"), 2L);
+
+        assertThat(updated.content()).isEqualTo("after");
+        assertThat(updated.deleted()).isFalse();
+    }
+
+    @Test
+    void updateComment_shouldRejectNonOwner() {
+        when(commentMapper.getCommentById(5L))
+            .thenReturn(comment(5L, 1L, 2L, "Alice", null, "before", "2026-03-29T09:00:00Z", null));
+
+        ApiException exception = assertThrows(
+            ApiException.class,
+            () -> commentService.updateComment(1L, 5L, new UpdateCommentRequest("after"), 3L)
+        );
+
+        assertThat(exception.getStatus()).isEqualTo(HttpStatus.FORBIDDEN);
+        assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.AUTH_UNAUTHORIZED);
+        verify(commentMapper, never()).updateComment(anyLong(), any());
+    }
+
+    @Test
+    void updateComment_shouldRejectDeletedComment() {
+        when(commentMapper.getCommentById(5L))
+            .thenReturn(comment(5L, 1L, 2L, "Alice", null, "before", "2026-03-29T09:00:00Z", "2026-03-29T09:20:00Z"));
+
+        ApiException exception = assertThrows(
+            ApiException.class,
+            () -> commentService.updateComment(1L, 5L, new UpdateCommentRequest("after"), 2L)
+        );
+
+        assertThat(exception.getStatus()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(exception.getErrorCode()).isEqualTo(ErrorCode.VALIDATION_ERROR);
+        verify(commentMapper, never()).updateComment(anyLong(), any());
     }
 
     private Comment comment(
