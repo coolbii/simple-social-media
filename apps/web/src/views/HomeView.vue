@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
+import { RouterLink } from 'vue-router';
 import { createPost, fetchPosts, uploadPostImage } from '../services/api';
 import type { PostItem } from '../types';
 
@@ -133,7 +134,6 @@ onBeforeUnmount(() => {
 <template>
   <section class="composer-card">
     <h1>建立貼文</h1>
-    <p class="helper-text">圖片上傳上限 1MB，圖片會先送到後端再上傳到儲存空間。</p>
 
     <textarea
       v-model="content"
@@ -143,23 +143,40 @@ onBeforeUnmount(() => {
       :disabled="isSubmitting"
     />
 
-    <div class="image-row">
-      <input ref="fileInputRef" type="file" accept="image/*" :disabled="isSubmitting" @change="onImageChange" />
-      <button v-if="selectedImage" type="button" class="text-btn" :disabled="isSubmitting" @click="clearSelectedImage">
-        移除圖片
-      </button>
+    <!-- Image upload zone -->
+    <input
+      ref="fileInputRef"
+      type="file"
+      accept="image/*"
+      class="file-input-hidden"
+      :disabled="isSubmitting"
+      @change="onImageChange"
+    />
+
+    <div
+      v-if="!selectedImage"
+      class="upload-trigger"
+      :class="{ 'is-disabled': isSubmitting }"
+      @click="fileInputRef?.click()"
+    >
+      <span class="upload-icon">🖼</span>
+      <span>新增圖片（上限 1&nbsp;MB）</span>
     </div>
 
-    <p v-if="selectedImage" class="file-meta">
-      已選擇：{{ selectedImage.name }}（{{ (selectedImage.size / 1024).toFixed(1) }} KB）
-    </p>
+    <div v-else class="image-preview-wrap">
+      <img :src="imagePreviewUrl!" alt="preview" class="preview-image" />
+      <div class="image-preview-meta">
+        <span class="file-meta">{{ selectedImage.name }} · {{ (selectedImage.size / 1024).toFixed(1) }} KB</span>
+        <button type="button" class="remove-image-btn" :disabled="isSubmitting" @click="clearSelectedImage">
+          移除
+        </button>
+      </div>
+    </div>
 
     <p v-if="imageError" class="error-text">{{ imageError }}</p>
     <p v-if="submitError" class="error-text">{{ submitError }}</p>
 
-    <img v-if="imagePreviewUrl" :src="imagePreviewUrl" alt="preview" class="preview-image" />
-
-    <button class="submit-btn" type="button" :disabled="!canSubmit" @click="submitPost">
+    <button class="post-submit-btn" type="button" :disabled="!canSubmit" @click="submitPost">
       {{ isUploadingImage ? '圖片上傳中…' : isSubmitting ? '發佈中…' : '發佈貼文' }}
     </button>
   </section>
@@ -179,6 +196,11 @@ onBeforeUnmount(() => {
         <p class="post-meta">{{ post.userName }} · {{ formatDateTime(post.createdAt) }}</p>
         <p class="post-content">{{ post.content }}</p>
         <img v-if="post.imageUrl" :src="post.imageUrl" alt="post image" class="post-image" />
+        <div class="post-actions">
+          <RouterLink class="text-btn" :to="{ name: 'post-detail', params: { postId: post.id } }">
+            查看討論串
+          </RouterLink>
+        </div>
       </li>
     </ul>
   </section>
@@ -204,12 +226,6 @@ onBeforeUnmount(() => {
   font-size: 1.25rem;
 }
 
-.helper-text {
-  margin: 0;
-  color: #64748b;
-  font-size: 0.9rem;
-}
-
 .content-input {
   width: 100%;
   border-radius: 0.75rem;
@@ -217,41 +233,110 @@ onBeforeUnmount(() => {
   padding: 0.75rem;
   font: inherit;
   resize: vertical;
+  transition:
+    border-color 0.15s,
+    box-shadow 0.15s;
 }
 
-.image-row {
+.content-input:focus {
+  outline: none;
+  border-color: #0f766e;
+  box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.12);
+}
+
+/* Hidden native file input */
+.file-input-hidden {
+  display: none;
+}
+
+/* Styled upload trigger */
+.upload-trigger {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-}
-
-.file-meta {
-  margin: 0;
+  gap: 0.5rem;
+  padding: 0.6rem 0.9rem;
+  border-radius: 0.65rem;
+  border: 1.5px dashed #94a3b8;
   color: #475569;
   font-size: 0.9rem;
+  cursor: pointer;
+  transition:
+    border-color 0.15s,
+    background 0.15s;
+  user-select: none;
+  width: fit-content;
+}
+
+.upload-trigger:hover:not(.is-disabled) {
+  border-color: #0f766e;
+  background: #f0fdfa;
+  color: #0f766e;
+}
+
+.upload-trigger.is-disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.upload-icon {
+  font-size: 1.1rem;
+  line-height: 1;
+}
+
+/* Preview */
+.image-preview-wrap {
+  display: grid;
+  gap: 0.45rem;
 }
 
 .preview-image {
   width: min(100%, 400px);
   border-radius: 0.75rem;
   border: 1px solid #cbd5e1;
+  display: block;
 }
 
-.submit-btn {
+.image-preview-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.file-meta {
+  color: #475569;
+  font-size: 0.875rem;
+}
+
+.remove-image-btn {
+  border: 0;
+  background: transparent;
+  color: #dc2626;
+  font-size: 0.875rem;
+  cursor: pointer;
+  padding: 0;
+}
+
+.remove-image-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.post-submit-btn {
   width: fit-content;
-  padding: 0.5rem 1rem;
+  padding: 0.5rem 1.25rem;
   border: 0;
   border-radius: 999px;
-  background: #0f766e;
+  background: linear-gradient(135deg, #0f766e, #0d9488);
   color: white;
   font-weight: 600;
   cursor: pointer;
+  transition: opacity 0.15s;
 }
 
-.submit-btn:disabled {
+.post-submit-btn:disabled {
   cursor: not-allowed;
-  opacity: 0.55;
+  opacity: 0.5;
 }
 
 .feed-header {
@@ -294,9 +379,15 @@ onBeforeUnmount(() => {
 }
 
 .post-image {
+  display: block;
   width: min(100%, 420px);
   border-radius: 0.6rem;
   border: 1px solid #e2e8f0;
+  margin-bottom: 0.5rem;
+}
+
+.post-actions {
+  margin-top: 0.5rem;
 }
 
 .text-btn {
@@ -305,6 +396,8 @@ onBeforeUnmount(() => {
   color: #0f766e;
   font-size: 0.9rem;
   cursor: pointer;
+  padding: 0;
+  text-decoration: none;
 }
 
 .text-btn:disabled {
@@ -320,5 +413,6 @@ onBeforeUnmount(() => {
 .error-text {
   margin: 0;
   color: #b91c1c;
+  font-size: 0.875rem;
 }
 </style>

@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia';
-import { getCurrentUser, login, logout, register } from '../services/api';
+import { getCurrentUser, login, logout, register, sendCode, verifyCode } from '../services/api';
 import type { AuthStatus, UserSummary } from '../types';
 
 interface AuthState {
@@ -32,8 +32,33 @@ export const useAuthStore = defineStore('auth', {
       this.status = 'authenticated';
       return response.user;
     },
-    async signUp(payload: { phoneNumber: string; userName: string; password: string; email?: string }) {
+    async sendVerificationCode(phoneNumber: string) {
+      return sendCode(phoneNumber);
+    },
+    async verifyPhone(phoneNumber: string, code: string) {
+      return verifyCode(phoneNumber, code);
+    },
+    async signUp(payload: {
+      registrationToken: string;
+      phoneNumber: string;
+      userName: string;
+      password: string;
+      email?: string;
+    }) {
       return register(payload);
+    },
+    async signUpAndIn(payload: {
+      registrationToken: string;
+      phoneNumber: string;
+      userName: string;
+      password: string;
+      email?: string;
+    }) {
+      await register(payload);
+      const response = await login({ phoneNumber: payload.phoneNumber, password: payload.password });
+      this.currentUser = response.user;
+      this.status = 'authenticated';
+      return response.user;
     },
     async signOut() {
       try {

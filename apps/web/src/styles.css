@@ -44,3 +44,82 @@ input,
 textarea {
   font: inherit;
 }
+
+/* ── Auth form shared styles ──────────────────────────────── */
+.auth-form {
+  display: grid;
+  gap: 1rem;
+}
+
+.auth-form label {
+  display: grid;
+  gap: 0.4rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #374151;
+}
+
+.auth-form input {
+  padding: 0.85rem 1rem;
+  border-radius: 0.875rem;
+  border: 1px solid rgba(148, 163, 184, 0.4);
+  background: white;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.auth-form input:focus {
+  outline: none;
+  border-color: #2563eb;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
+}
+
+.submit-btn {
+  margin-top: 0.25rem;
+  padding: 0.9rem 1rem;
+  border: none;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #2563eb, #1d4ed8);
+  color: white;
+  font-weight: 700;
+  cursor: pointer;
+  transition: opacity 0.15s;
+}
+
+.submit-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.link-btn {
+  margin-top: 0.25rem;
+  padding: 0.5rem;
+  border: none;
+  background: transparent;
+  color: #2563eb;
+  font-size: 0.875rem;
+  cursor: pointer;
+  text-align: left;
+}
+
+.field-error {
+  margin: 0;
+  font-size: 0.85rem;
+  color: #b91c1c;
+}
+
+.step-hint {
+  margin: 0 0 0.25rem;
+  font-size: 0.875rem;
+  color: #475569;
+  line-height: 1.55;
+}
+
+.optional {
+  font-weight: 400;
+  color: #94a3b8;
+}
+
+.countdown {
+  font-weight: 700;
+  color: #1d4ed8;
+}
