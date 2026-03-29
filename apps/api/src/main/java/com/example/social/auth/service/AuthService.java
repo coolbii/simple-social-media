@@ -10,7 +10,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicLong;
 import java.util.regex.Pattern;
 
 import com.example.social.auth.dto.LoginRequest;
@@ -23,9 +22,13 @@ import com.example.social.auth.dto.SendCodeResponse;
 import com.example.social.auth.dto.UserSummary;
 import com.example.social.auth.dto.VerifyCodeRequest;
 import com.example.social.auth.dto.VerifyCodeResponse;
+import com.example.social.auth.mapper.RefreshTokenMapper;
+import com.example.social.auth.mapper.UserMapper;
+import com.example.social.auth.model.RefreshTokenSession;
 import com.example.social.auth.model.RegisteredUser;
 import com.example.social.common.exception.ApiException;
 import com.example.social.common.exception.ErrorCode;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -37,31 +40,32 @@ public class AuthService {
     private static final Pattern E164_PATTERN = Pattern.compile("^\\+[1-9]\\d{7,14}$");
 
     private final PasswordEncoder passwordEncoder;
+    private final UserMapper userMapper;
+    private final RefreshTokenMapper refreshTokenMapper;
     private final SmsVerificationProvider smsVerificationProvider;
     private final long refreshTokenTtlSeconds;
     private final long registrationTokenTtlSeconds;
     private final int otpMaxAttempts;
-    private final AtomicLong userSequence = new AtomicLong(2);
-    private final Map<Long, RegisteredUser> users = new ConcurrentHashMap<>();
-    private final Map<String, RegisteredUser> usersByPhone = new ConcurrentHashMap<>();
     private final Map<String, VerificationRequestRecord> verificationRequestsByPhone =
         new ConcurrentHashMap<>();
     private final Map<String, RegistrationTokenRecord> registrationTokens = new ConcurrentHashMap<>();
-    private final Map<String, RefreshTokenRecord> refreshTokensByHash = new ConcurrentHashMap<>();
 
     public AuthService(
         PasswordEncoder passwordEncoder,
+        UserMapper userMapper,
+        RefreshTokenMapper refreshTokenMapper,
         SmsVerificationProvider smsVerificationProvider,
         @Value("${app.auth.refresh-token-ttl-seconds:2592000}") long refreshTokenTtlSeconds,
         @Value("${app.auth.registration-token-ttl-seconds:600}") long registrationTokenTtlSeconds,
         @Value("${app.auth.otp.max-attempts:5}") int otpMaxAttempts
     ) {
         this.passwordEncoder = passwordEncoder;
+        this.userMapper = userMapper;
+        this.refreshTokenMapper = refreshTokenMapper;
         this.smsVerificationProvider = smsVerificationProvider;
         this.refreshTokenTtlSeconds = refreshTokenTtlSeconds;
         this.registrationTokenTtlSeconds = registrationTokenTtlSeconds;
         this.otpMaxAttempts = otpMaxAttempts;
-        seedUsers();
     }
 
     public SendCodeResponse sendCode(SendCodeRequest request) {
@@ -186,24 +190,26 @@ public class AuthService {
             );
         }
 
-        long userId = userSequence.getAndIncrement();
-        RegisteredUser user = new RegisteredUser(
-            userId,
-            phoneNumber,
-            request.userName(),
-            request.email(),
-            passwordEncoder.encode(request.password()),
-            "https://images.example.com/covers/default-cover.png",
-            "Scaffold account created from the Nx monorepo starter."
-        );
-        if (usersByPhone.putIfAbsent(phoneNumber, user) != null) {
+        long userId;
+        try {
+            Long registeredUserId = userMapper.registerUser(
+                phoneNumber,
+                request.userName(),
+                request.email(),
+                passwordEncoder.encode(request.password())
+            );
+            if (registeredUserId == null) {
+                throw new IllegalStateException("Unable to register user.");
+            }
+            userId = registeredUserId;
+        } catch (DuplicateKeyException exception) {
             throw new ApiException(
                 HttpStatus.CONFLICT,
                 ErrorCode.AUTH_PHONE_ALREADY_REGISTERED,
                 "A user with this phone number already exists."
             );
         }
-        users.put(userId, user);
+
         registrationTokens.put(
             token.token(),
             new RegistrationTokenRecord(token.token(), token.phoneNumber(), token.expiresAt(), Instant.now())
@@ -239,9 +245,9 @@ public class AuthService {
         if (rawSessionToken == null || rawSessionToken.isBlank()) {
             return;
         }
-        RefreshTokenRecord token = refreshTokensByHash.get(sha256(rawSessionToken));
-        if (token != null) {
-            token.revokeIfActive("LOGOUT");
+        RefreshTokenSession token = refreshTokenMapper.findByHash(sha256(rawSessionToken));
+        if (token != null && token.revokedAt() == null) {
+            refreshTokenMapper.revokeRefreshToken(token.id(), "LOGOUT");
         }
     }
 
@@ -252,13 +258,13 @@ public class AuthService {
             throw unauthorized("Session is missing.");
         }
 
-        RefreshTokenRecord session = refreshTokensByHash.get(sha256(rawSessionToken));
+        RefreshTokenSession session = refreshTokenMapper.findByHash(sha256(rawSessionToken));
         if (session == null || Instant.now().isAfter(session.expiresAt()) || session.revokedAt() != null) {
             throw unauthorized("Session is invalid.");
         }
 
         long userId = session.userId();
-        RegisteredUser user = users.get(userId);
+        RegisteredUser user = userMapper.findById(userId);
         if (user == null) {
             throw unauthorized("Session is invalid.");
         }
@@ -277,22 +283,8 @@ public class AuthService {
         return refreshTokenTtlSeconds;
     }
 
-    private void seedUsers() {
-        RegisteredUser seededUser = new RegisteredUser(
-            1L,
-            normalizePhoneNumber("0912345678"),
-            "Brian",
-            "brian@example.com",
-            passwordEncoder.encode("StrongPassword123"),
-            "https://images.example.com/covers/brian-cover.png",
-            "Seed user for the scaffold auth flow."
-        );
-        users.put(seededUser.id(), seededUser);
-        usersByPhone.put(seededUser.phoneNumber(), seededUser);
-    }
-
     private Optional<RegisteredUser> findByPhone(String phoneNumber) {
-        return Optional.ofNullable(usersByPhone.get(phoneNumber));
+        return Optional.ofNullable(userMapper.findByPhone(phoneNumber));
     }
 
     private UserSummary toSummary(RegisteredUser user) {
@@ -306,12 +298,18 @@ public class AuthService {
     private String issueSessionToken(long userId) {
         String token = "rt_" + UUID.randomUUID() + UUID.randomUUID();
         String tokenHash = sha256(token);
-        RefreshTokenRecord record = new RefreshTokenRecord(
-            tokenHash,
+        Long insertedId = refreshTokenMapper.insertRefreshToken(
             userId,
-            Instant.now().plusSeconds(refreshTokenTtlSeconds)
+            tokenHash,
+            "fam_" + UUID.randomUUID(),
+            null,
+            Instant.now().plusSeconds(refreshTokenTtlSeconds),
+            null,
+            null
         );
-        refreshTokensByHash.put(tokenHash, record);
+        if (insertedId == null) {
+            throw new IllegalStateException("Unable to create session.");
+        }
         return token;
     }
 
@@ -343,7 +341,6 @@ public class AuthService {
         registrationTokens.entrySet().removeIf(
             entry -> now.isAfter(entry.getValue().expiresAt()) || entry.getValue().consumedAt() != null
         );
-        refreshTokensByHash.entrySet().removeIf(entry -> now.isAfter(entry.getValue().expiresAt()));
     }
 
     private ApiException tooManyVerifyAttempts() {
@@ -381,53 +378,5 @@ public class AuthService {
         Instant expiresAt,
         Instant consumedAt
     ) {
-    }
-
-    private static final class RefreshTokenRecord {
-
-        private final String tokenHash;
-        private final long userId;
-        private final Instant expiresAt;
-        private volatile Instant revokedAt;
-        private volatile String revokeReason;
-
-        private RefreshTokenRecord(
-            String tokenHash,
-            long userId,
-            Instant expiresAt
-        ) {
-            this.tokenHash = tokenHash;
-            this.userId = userId;
-            this.expiresAt = expiresAt;
-        }
-
-        private String tokenHash() {
-            return tokenHash;
-        }
-
-        private long userId() {
-            return userId;
-        }
-
-        private Instant expiresAt() {
-            return expiresAt;
-        }
-
-        private Instant revokedAt() {
-            return revokedAt;
-        }
-
-        private String revokeReason() {
-            return revokeReason;
-        }
-
-        private synchronized boolean revokeIfActive(String reason) {
-            if (revokedAt != null) {
-                return false;
-            }
-            this.revokedAt = Instant.now();
-            this.revokeReason = reason;
-            return true;
-        }
     }
 }

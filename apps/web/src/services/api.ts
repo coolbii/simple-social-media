@@ -155,7 +155,7 @@ export async function verifyCode(phoneNumber: string, code: string): Promise<Ver
 }
 
 export async function getCurrentUser(): Promise<UserSummary> {
-  const response = await withAuth<MeResponse>(() => AuthService.authMe());
+  const response = await withAuth<MeResponse>(() => AuthService.authMe({}));
   return toUserSummary(response, 'me.data');
 }
 

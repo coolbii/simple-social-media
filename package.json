@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "license": "MIT",
   "scripts": {
-    "dev:api": "nx serve api",
+    "dev:api": "set -a; [ -f .env.api ] && . ./.env.api; set +a; nx serve api",
     "dev:web": "nx dev web",
     "sync:openapi": "nx run api-contract:sync",
     "dev:web:sync": "npm run sync:openapi && nx dev web",
