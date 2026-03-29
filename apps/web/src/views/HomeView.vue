@@ -1,10 +1,15 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
 import { RouterLink } from 'vue-router';
-import { createPost, fetchPosts, uploadPostImage } from '../services/api';
+import { createPost, deletePost, fetchPosts, updatePost, uploadPostImage } from '../services/api';
+import { useAuthStore } from '../stores/auth';
 import type { PostItem } from '../types';
 
 const MAX_IMAGE_SIZE_BYTES = 1 * 1024 * 1024;
+const MAX_POST_CONTENT_LENGTH = 500;
+
+const authStore = useAuthStore();
+const currentUserId = computed(() => authStore.currentUser?.id ?? null);
 
 const posts = ref<PostItem[]>([]);
 const isLoadingPosts = ref(true);
@@ -15,17 +20,37 @@ const selectedImage = ref<File | null>(null);
 const imagePreviewUrl = ref<string | null>(null);
 const imageError = ref('');
 const submitError = ref('');
+const postActionError = ref('');
+const postActionPostId = ref<number | null>(null);
 
 const isSubmitting = ref(false);
 const isUploadingImage = ref(false);
 const fileInputRef = ref<HTMLInputElement | null>(null);
+const editingPostId = ref<number | null>(null);
+const editDraftContent = ref('');
+const isSavingEdit = ref(false);
+const deletingPostId = ref<number | null>(null);
 
 const canSubmit = computed(() => {
-  return content.value.trim().length > 0 && !isSubmitting.value && imageError.value.length === 0;
+  const trimmed = content.value.trim();
+  return (
+    trimmed.length > 0 &&
+    trimmed.length <= MAX_POST_CONTENT_LENGTH &&
+    !isSubmitting.value &&
+    imageError.value.length === 0
+  );
 });
 
 function formatDateTime(dateTime: string): string {
   return new Date(dateTime).toLocaleString();
+}
+
+function isPostOwner(post: PostItem): boolean {
+  return currentUserId.value !== null && post.userId === currentUserId.value;
+}
+
+function replacePost(nextPost: PostItem) {
+  posts.value = posts.value.map((post) => (post.id === nextPost.id ? nextPost : post));
 }
 
 function revokePreviewUrl() {
@@ -73,6 +98,8 @@ function onImageChange(event: Event) {
 async function loadPosts() {
   isLoadingPosts.value = true;
   loadingError.value = '';
+  postActionError.value = '';
+  postActionPostId.value = null;
   try {
     posts.value = await fetchPosts();
   } catch (error) {
@@ -88,6 +115,10 @@ async function submitPost() {
 
   if (trimmedContent.length === 0) {
     submitError.value = '請先輸入貼文內容。';
+    return;
+  }
+  if (trimmedContent.length > MAX_POST_CONTENT_LENGTH) {
+    submitError.value = `貼文內容不可超過 ${MAX_POST_CONTENT_LENGTH} 字。`;
     return;
   }
 
@@ -119,6 +150,78 @@ async function submitPost() {
   } finally {
     isUploadingImage.value = false;
     isSubmitting.value = false;
+  }
+}
+
+function beginEditPost(post: PostItem) {
+  editingPostId.value = post.id;
+  editDraftContent.value = post.content;
+  postActionError.value = '';
+  postActionPostId.value = post.id;
+}
+
+function cancelEditPost() {
+  editingPostId.value = null;
+  editDraftContent.value = '';
+  postActionError.value = '';
+  postActionPostId.value = null;
+}
+
+async function saveEditPost(post: PostItem) {
+  if (isSavingEdit.value) {
+    return;
+  }
+
+  const trimmed = editDraftContent.value.trim();
+  if (trimmed.length === 0) {
+    postActionError.value = '貼文內容不可為空。';
+    postActionPostId.value = post.id;
+    return;
+  }
+  if (trimmed.length > MAX_POST_CONTENT_LENGTH) {
+    postActionError.value = `貼文內容不可超過 ${MAX_POST_CONTENT_LENGTH} 字。`;
+    postActionPostId.value = post.id;
+    return;
+  }
+
+  isSavingEdit.value = true;
+  postActionError.value = '';
+  try {
+    const updated = await updatePost(post.id, { content: trimmed });
+    replacePost(updated);
+    cancelEditPost();
+  } catch (error) {
+    postActionError.value = error instanceof Error ? error.message : '更新貼文失敗。';
+    postActionPostId.value = post.id;
+  } finally {
+    isSavingEdit.value = false;
+  }
+}
+
+async function removePost(post: PostItem) {
+  if (deletingPostId.value !== null) {
+    return;
+  }
+
+  const confirmed = window.confirm('確定要刪除這篇貼文嗎？此操作無法復原。');
+  if (!confirmed) {
+    return;
+  }
+
+  deletingPostId.value = post.id;
+  postActionError.value = '';
+  postActionPostId.value = post.id;
+  try {
+    await deletePost(post.id);
+    posts.value = posts.value.filter((candidate) => candidate.id !== post.id);
+    if (editingPostId.value === post.id) {
+      cancelEditPost();
+    }
+    postActionPostId.value = null;
+  } catch (error) {
+    postActionError.value = error instanceof Error ? error.message : '刪除貼文失敗。';
+  } finally {
+    deletingPostId.value = null;
   }
 }
 
@@ -193,14 +296,64 @@ onBeforeUnmount(() => {
 
     <ul v-else class="post-list">
       <li v-for="post in posts" :key="post.id" class="post-item">
-        <p class="post-meta">{{ post.userName }} · {{ formatDateTime(post.createdAt) }}</p>
-        <p class="post-content">{{ post.content }}</p>
+        <p class="post-meta">
+          {{ post.userName }} · {{ formatDateTime(post.createdAt) }}
+          <span v-if="post.updatedAt" class="post-updated">（已編輯 {{ formatDateTime(post.updatedAt) }}）</span>
+        </p>
+
+        <div v-if="editingPostId === post.id" class="edit-post-panel">
+          <textarea
+            v-model="editDraftContent"
+            class="content-input edit-content-input"
+            rows="4"
+            :maxlength="MAX_POST_CONTENT_LENGTH"
+            :disabled="isSavingEdit"
+          />
+          <div class="edit-post-footer">
+            <span
+              class="edit-char-count"
+              :class="{ 'is-warning': editDraftContent.trim().length > MAX_POST_CONTENT_LENGTH }"
+            >
+              {{ editDraftContent.trim().length }} / {{ MAX_POST_CONTENT_LENGTH }}
+            </span>
+            <div class="edit-post-actions">
+              <button type="button" class="secondary-btn" :disabled="isSavingEdit" @click="cancelEditPost">取消</button>
+              <button type="button" class="post-submit-btn" :disabled="isSavingEdit" @click="saveEditPost(post)">
+                {{ isSavingEdit ? '儲存中…' : '儲存' }}
+              </button>
+            </div>
+          </div>
+        </div>
+        <p v-else class="post-content">{{ post.content }}</p>
+
         <img v-if="post.imageUrl" :src="post.imageUrl" alt="post image" class="post-image" />
         <div class="post-actions">
           <RouterLink class="text-btn" :to="{ name: 'post-detail', params: { postId: post.id } }">
             查看討論串
           </RouterLink>
+          <template v-if="isPostOwner(post)">
+            <button
+              v-if="editingPostId !== post.id"
+              type="button"
+              class="text-btn"
+              :disabled="deletingPostId === post.id"
+              @click="beginEditPost(post)"
+            >
+              編輯
+            </button>
+            <button
+              type="button"
+              class="text-btn danger-text-btn"
+              :disabled="isSavingEdit || deletingPostId === post.id"
+              @click="removePost(post)"
+            >
+              {{ deletingPostId === post.id ? '刪除中…' : '刪除' }}
+            </button>
+          </template>
         </div>
+        <p v-if="postActionError && postActionPostId === post.id" class="error-text post-action-error">
+          {{ postActionError }}
+        </p>
       </li>
     </ul>
   </section>
@@ -372,10 +525,61 @@ onBeforeUnmount(() => {
   font-size: 0.85rem;
 }
 
+.post-updated {
+  color: #94a3b8;
+}
+
 .post-content {
   margin: 0 0 0.5rem;
   color: #0f172a;
   white-space: pre-wrap;
+}
+
+.edit-post-panel {
+  display: grid;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.edit-content-input {
+  margin: 0;
+}
+
+.edit-post-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.edit-char-count {
+  font-size: 0.8rem;
+  color: #64748b;
+}
+
+.edit-char-count.is-warning {
+  color: #b45309;
+}
+
+.edit-post-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.secondary-btn {
+  padding: 0.45rem 1rem;
+  border: 1px solid rgba(148, 163, 184, 0.45);
+  border-radius: 999px;
+  background: white;
+  color: #334155;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.secondary-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .post-image {
@@ -388,6 +592,9 @@ onBeforeUnmount(() => {
 
 .post-actions {
   margin-top: 0.5rem;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
 }
 
 .text-btn {
@@ -403,6 +610,14 @@ onBeforeUnmount(() => {
 .text-btn:disabled {
   opacity: 0.45;
   cursor: not-allowed;
+}
+
+.danger-text-btn {
+  color: #dc2626;
+}
+
+.post-action-error {
+  margin-top: 0.35rem;
 }
 
 .state-text {

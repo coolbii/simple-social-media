@@ -1,14 +1,16 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue';
-import { useRoute } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import CommentThreadNode from '../components/comment/CommentThreadNode.vue';
-import { createComment, deleteComment, fetchComments, fetchPost } from '../services/api';
+import { createComment, deletePost, deleteComment, fetchComments, fetchPost, updatePost } from '../services/api';
 import { useAuthStore } from '../stores/auth';
 import type { CommentCreatedEvent, CommentItem, PostItem } from '../types';
 import { resolveSseUrl } from '@simple-social-media/utils';
 
 const route = useRoute();
+const router = useRouter();
 const authStore = useAuthStore();
+const MAX_POST_CONTENT_LENGTH = 500;
 
 const post = ref<PostItem | null>(null);
 const comments = ref<CommentItem[]>([]);
@@ -18,9 +20,17 @@ const visibleCountByParent = ref<Record<string, number>>({ root: 5 });
 const errorMessage = ref('');
 const isSubmitting = ref(false);
 const deletingCommentId = ref<number | null>(null);
+const isEditingPost = ref(false);
+const editPostDraft = ref('');
+const isSavingPost = ref(false);
+const isDeletingPost = ref(false);
+const postActionError = ref('');
 
 const postId = computed(() => Number(route.params.postId));
 const currentUserId = computed(() => authStore.currentUser?.id ?? null);
+const isPostOwner = computed(() => {
+  return post.value !== null && currentUserId.value !== null && post.value.userId === currentUserId.value;
+});
 
 const sortedComments = computed(() => {
   return [...comments.value].sort((a, b) => {
@@ -109,6 +119,71 @@ async function loadPost() {
   } catch (error) {
     console.error(error);
     errorMessage.value = 'Post detail could not be loaded.';
+  }
+}
+
+function beginPostEdit() {
+  if (!post.value) {
+    return;
+  }
+
+  isEditingPost.value = true;
+  editPostDraft.value = post.value.content;
+  postActionError.value = '';
+}
+
+function cancelPostEdit() {
+  isEditingPost.value = false;
+  editPostDraft.value = '';
+  postActionError.value = '';
+}
+
+async function savePostEdit() {
+  if (!post.value || isSavingPost.value) {
+    return;
+  }
+
+  const trimmed = editPostDraft.value.trim();
+  if (trimmed.length === 0) {
+    postActionError.value = '貼文內容不可為空。';
+    return;
+  }
+  if (trimmed.length > MAX_POST_CONTENT_LENGTH) {
+    postActionError.value = `貼文內容不可超過 ${MAX_POST_CONTENT_LENGTH} 字。`;
+    return;
+  }
+
+  isSavingPost.value = true;
+  postActionError.value = '';
+  try {
+    post.value = await updatePost(postId.value, { content: trimmed });
+    cancelPostEdit();
+  } catch (error) {
+    postActionError.value = error instanceof Error ? error.message : '更新貼文失敗。';
+  } finally {
+    isSavingPost.value = false;
+  }
+}
+
+async function removePost() {
+  if (isDeletingPost.value) {
+    return;
+  }
+
+  const confirmed = window.confirm('確定要刪除這篇貼文嗎？此操作無法復原。');
+  if (!confirmed) {
+    return;
+  }
+
+  isDeletingPost.value = true;
+  postActionError.value = '';
+  try {
+    await deletePost(postId.value);
+    await router.push('/');
+  } catch (error) {
+    postActionError.value = error instanceof Error ? error.message : '刪除貼文失敗。';
+  } finally {
+    isDeletingPost.value = false;
   }
 }
 
@@ -205,6 +280,9 @@ watch(
   () => {
     errorMessage.value = '';
     replyTargetId.value = null;
+    isEditingPost.value = false;
+    editPostDraft.value = '';
+    postActionError.value = '';
     resetVisibleCounts();
     void loadPost();
     void loadComments();
@@ -220,10 +298,45 @@ onBeforeUnmount(() => {
 
 <template>
   <section class="detail-card">
-    <p class="detail-label">Post detail</p>
-    <p v-if="post" class="meta">{{ post.userName }} · {{ new Date(post.createdAt).toLocaleString() }}</p>
-    <p class="post-body">{{ post?.content ?? 'Loading post…' }}</p>
+    <div class="post-header-row">
+      <p class="detail-label">Post detail</p>
+      <div v-if="isPostOwner" class="post-owner-actions">
+        <button v-if="!isEditingPost" type="button" class="text-btn" :disabled="isDeletingPost" @click="beginPostEdit">
+          編輯貼文
+        </button>
+        <button
+          type="button"
+          class="text-btn danger-text-btn"
+          :disabled="isSavingPost || isDeletingPost"
+          @click="removePost"
+        >
+          {{ isDeletingPost ? '刪除中…' : '刪除貼文' }}
+        </button>
+      </div>
+    </div>
+    <p v-if="post" class="meta">
+      {{ post.userName }} · {{ new Date(post.createdAt).toLocaleString() }}
+      <span v-if="post.updatedAt">（已編輯 {{ new Date(post.updatedAt).toLocaleString() }}）</span>
+    </p>
+
+    <div v-if="isEditingPost" class="edit-post-panel">
+      <textarea v-model="editPostDraft" rows="4" :maxlength="MAX_POST_CONTENT_LENGTH" class="edit-post-textarea" />
+      <div class="edit-post-footer">
+        <span class="char-count" :class="{ 'near-limit': editPostDraft.trim().length > MAX_POST_CONTENT_LENGTH }">
+          {{ editPostDraft.trim().length }} / {{ MAX_POST_CONTENT_LENGTH }}
+        </span>
+        <div class="edit-post-actions">
+          <button type="button" class="text-btn" :disabled="isSavingPost" @click="cancelPostEdit">取消</button>
+          <button type="button" class="comment-button" :disabled="isSavingPost" @click="savePostEdit">
+            {{ isSavingPost ? '儲存中…' : '儲存' }}
+          </button>
+        </div>
+      </div>
+    </div>
+    <p v-else class="post-body">{{ post?.content ?? 'Loading post…' }}</p>
+
     <img v-if="post?.imageUrl" :src="post.imageUrl" alt="post image" class="post-detail-image" />
+    <p v-if="postActionError" class="error">{{ postActionError }}</p>
     <p v-if="errorMessage" class="error">{{ errorMessage }}</p>
   </section>
 
@@ -290,6 +403,19 @@ onBeforeUnmount(() => {
   color: #0f766e;
 }
 
+.post-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.post-owner-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
 .post-body {
   margin: 0.25rem 0 0.75rem;
   white-space: pre-wrap;
@@ -310,6 +436,33 @@ onBeforeUnmount(() => {
   margin: 0 0 0.35rem;
   color: #475569;
   font-size: 0.875rem;
+}
+
+.edit-post-panel {
+  margin: 0.35rem 0 0.75rem;
+}
+
+.edit-post-textarea {
+  width: 100%;
+  resize: vertical;
+  padding: 1rem;
+  border-radius: 1rem;
+  border: 1px solid rgba(148, 163, 184, 0.35);
+  font: inherit;
+}
+
+.edit-post-footer {
+  margin-top: 0.6rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.edit-post-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
 }
 
 .comments-header {
@@ -397,5 +550,24 @@ textarea:focus {
 
 .error {
   color: #b91c1c;
+}
+
+.text-btn {
+  border: 0;
+  background: transparent;
+  color: #0f766e;
+  font-size: 0.9rem;
+  cursor: pointer;
+  padding: 0;
+  text-decoration: none;
+}
+
+.text-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.danger-text-btn {
+  color: #dc2626;
 }
 </style>
