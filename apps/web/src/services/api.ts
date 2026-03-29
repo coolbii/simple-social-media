@@ -234,6 +234,40 @@ export async function deleteComment(postId: number, commentId: number): Promise<
   return toCommentItem(data);
 }
 
+export async function updateComment(
+  postId: number,
+  commentId: number,
+  payload: { content: string }
+): Promise<CommentItem> {
+  const url = OpenAPI.BASE
+    ? `${OpenAPI.BASE}/api/posts/${postId}/comments/${commentId}`
+    : `/api/posts/${postId}/comments/${commentId}`;
+
+  const response = await fetch(url, {
+    method: 'PUT',
+    credentials: 'include',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(payload),
+  });
+
+  const body = await response.json().catch(() => null);
+  if (!response.ok) {
+    const message =
+      typeof body?.error?.message === 'string' && body.error.message.trim().length > 0
+        ? body.error.message
+        : 'Update comment failed. Please try again.';
+    throw new Error(message);
+  }
+
+  const data = body?.data as CommentResponse | undefined;
+  if (!data) {
+    throw new Error('Update comment response missing data.');
+  }
+  return toCommentItem(data);
+}
+
 export async function uploadPostImage(file: File): Promise<string> {
   const formData = new FormData();
   formData.append('file', file);

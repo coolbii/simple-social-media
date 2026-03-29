@@ -2,7 +2,15 @@
 import { computed, onBeforeUnmount, ref, watch } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import CommentThreadNode from '../components/comment/CommentThreadNode.vue';
-import { createComment, deletePost, deleteComment, fetchComments, fetchPost, updatePost } from '../services/api';
+import {
+  createComment,
+  deletePost,
+  deleteComment,
+  fetchComments,
+  fetchPost,
+  updateComment,
+  updatePost,
+} from '../services/api';
 import { useAuthStore } from '../stores/auth';
 import type { CommentCreatedEvent, CommentItem, PostItem } from '../types';
 import { resolveSseUrl } from '@simple-social-media/utils';
@@ -20,6 +28,8 @@ const visibleCountByParent = ref<Record<string, number>>({ root: 5 });
 const errorMessage = ref('');
 const isSubmitting = ref(false);
 const deletingCommentId = ref<number | null>(null);
+const editingCommentId = ref<number | null>(null);
+const isUpdatingComment = ref(false);
 const isEditingPost = ref(false);
 const editPostDraft = ref('');
 const isSavingPost = ref(false);
@@ -259,11 +269,40 @@ async function removeComment(commentId: number) {
     if (replyTargetId.value === commentId) {
       replyTargetId.value = null;
     }
+    if (editingCommentId.value === commentId) {
+      editingCommentId.value = null;
+    }
   } catch (error) {
     console.error(error);
     errorMessage.value = error instanceof Error ? error.message : 'Delete comment failed.';
   } finally {
     deletingCommentId.value = null;
+  }
+}
+
+function startEditComment(commentId: number) {
+  editingCommentId.value = commentId;
+}
+
+function cancelEditComment() {
+  editingCommentId.value = null;
+}
+
+async function submitEditComment(commentId: number, content: string) {
+  if (isUpdatingComment.value) {
+    return;
+  }
+
+  isUpdatingComment.value = true;
+  try {
+    const updated = await updateComment(postId.value, commentId, { content });
+    upsertComment(updated);
+    editingCommentId.value = null;
+  } catch (error) {
+    console.error(error);
+    errorMessage.value = error instanceof Error ? error.message : 'Edit comment failed.';
+  } finally {
+    isUpdatingComment.value = false;
   }
 }
 
@@ -280,6 +319,7 @@ watch(
   () => {
     errorMessage.value = '';
     replyTargetId.value = null;
+    editingCommentId.value = null;
     isEditingPost.value = false;
     editPostDraft.value = '';
     postActionError.value = '';
@@ -373,9 +413,14 @@ onBeforeUnmount(() => {
       :can-reply="authStore.isAuthenticated"
       :current-user-id="currentUserId"
       :active-reply-id="replyTargetId"
+      :active-edit-id="editingCommentId"
+      :is-updating-comment="isUpdatingComment"
       @reply="startReply"
       @cancel-reply="cancelReply"
       @submit-reply="submitReply"
+      @start-edit="startEditComment"
+      @cancel-edit="cancelEditComment"
+      @submit-edit="submitEditComment"
       @delete="removeComment"
       @load-more="loadMoreReplies"
     />

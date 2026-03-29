@@ -14,12 +14,17 @@ const props = defineProps<{
   canReply: boolean;
   currentUserId: number | null;
   activeReplyId: number | null;
+  activeEditId: number | null;
+  isUpdatingComment: boolean;
 }>();
 
 const emit = defineEmits<{
   reply: [commentId: number];
   cancelReply: [];
   submitReply: [commentId: number, content: string];
+  startEdit: [commentId: number];
+  cancelEdit: [];
+  submitEdit: [commentId: number, content: string];
   delete: [commentId: number];
   loadMore: [parentCommentId: number];
 }>();
@@ -32,18 +37,34 @@ const hasMoreChildren = computed(() => allChildren.value.length > visibleCount.v
 const remainingChildren = computed(() => allChildren.value.length - visibleCount.value);
 const isOwnComment = computed(() => props.currentUserId !== null && props.comment.userId === props.currentUserId);
 const isReplying = computed(() => props.activeReplyId === props.comment.id);
+const isEditing = computed(() => props.activeEditId === props.comment.id);
 
 const replyDraft = ref('');
+const editDraft = ref('');
 
 // Clear draft when this composer is dismissed
 watch(isReplying, (active) => {
   if (!active) replyDraft.value = '';
 });
 
+watch(isEditing, (active) => {
+  if (active) {
+    editDraft.value = props.comment.content;
+    return;
+  }
+  editDraft.value = '';
+});
+
 function onSubmitReply() {
   const text = replyDraft.value.trim();
   if (!text) return;
   emit('submitReply', props.comment.id, text);
+}
+
+function onSubmitEdit() {
+  const text = editDraft.value.trim();
+  if (!text) return;
+  emit('submitEdit', props.comment.id, text);
 }
 </script>
 
@@ -67,6 +88,14 @@ function onSubmitReply() {
         @click="emit('reply', comment.id)"
       >
         回覆
+      </button>
+      <button
+        v-if="isOwnComment && !isEditing"
+        type="button"
+        class="action-btn reply-btn"
+        @click="emit('startEdit', comment.id)"
+      >
+        編輯
       </button>
       <button v-if="isOwnComment" type="button" class="action-btn delete-btn" @click="emit('delete', comment.id)">
         刪除
@@ -101,6 +130,35 @@ function onSubmitReply() {
       </div>
     </div>
 
+    <div v-if="isEditing" class="inline-composer">
+      <textarea
+        v-model="editDraft"
+        class="reply-textarea"
+        rows="3"
+        maxlength="280"
+        :placeholder="`編輯 ${comment.userName} 的留言…`"
+        autofocus
+      />
+      <div class="inline-composer-footer">
+        <span class="char-count" :class="{ 'near-limit': editDraft.length >= 260 }">
+          {{ editDraft.length }}&thinsp;/&thinsp;280
+        </span>
+        <div class="inline-composer-actions">
+          <button type="button" class="action-btn cancel-btn" :disabled="isUpdatingComment" @click="emit('cancelEdit')">
+            取消
+          </button>
+          <button
+            type="button"
+            class="reply-submit-btn"
+            :disabled="isUpdatingComment || editDraft.trim().length === 0"
+            @click="onSubmitEdit"
+          >
+            {{ isUpdatingComment ? '儲存中…' : '儲存' }}
+          </button>
+        </div>
+      </div>
+    </div>
+
     <div v-if="visibleChildren.length > 0" class="children">
       <CommentThreadNode
         v-for="child in visibleChildren"
@@ -112,9 +170,14 @@ function onSubmitReply() {
         :can-reply="canReply"
         :current-user-id="currentUserId"
         :active-reply-id="activeReplyId"
+        :active-edit-id="activeEditId"
+        :is-updating-comment="isUpdatingComment"
         @reply="emit('reply', $event)"
         @cancel-reply="emit('cancelReply')"
         @submit-reply="(id, text) => emit('submitReply', id, text)"
+        @start-edit="emit('startEdit', $event)"
+        @cancel-edit="emit('cancelEdit')"
+        @submit-edit="(id, text) => emit('submitEdit', id, text)"
         @delete="emit('delete', $event)"
         @load-more="emit('loadMore', $event)"
       />
