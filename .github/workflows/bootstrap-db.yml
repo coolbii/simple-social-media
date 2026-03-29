@@ -65,6 +65,7 @@ jobs:
             COLLATE utf8mb4_unicode_ci;
 
           CREATE USER IF NOT EXISTS '${RDS_APP_USER}'@'%' IDENTIFIED BY '${RDS_APP_PASSWORD}';
+          ALTER USER '${RDS_APP_USER}'@'%' IDENTIFIED BY '${RDS_APP_PASSWORD}';
 
           GRANT SELECT, INSERT, UPDATE, DELETE,
                 CREATE, ALTER, DROP, INDEX, REFERENCES,
@@ -90,3 +91,21 @@ jobs:
             --password="${RDS_ADMIN_PASSWORD}" \
             --batch --skip-column-names \
             --execute="SHOW GRANTS FOR '${RDS_APP_USER}'@'%';"
+
+      - name: Verify app user login
+        env:
+          RDS_HOST: ${{ secrets.RDS_HOST }}
+          RDS_PORT: ${{ secrets.RDS_PORT }}
+          RDS_DATABASE: ${{ secrets.RDS_DATABASE }}
+          RDS_APP_USER: ${{ secrets.RDS_APP_USER }}
+          RDS_APP_PASSWORD: ${{ secrets.RDS_APP_PASSWORD }}
+        run: |
+          set -euo pipefail
+          DB_NAME="${RDS_DATABASE:-simple_social_media}"
+          mysql \
+            --host="${RDS_HOST}" \
+            --port="${RDS_PORT}" \
+            --user="${RDS_APP_USER}" \
+            --password="${RDS_APP_PASSWORD}" \
+            --database="${DB_NAME}" \
+            --execute="SELECT 1;"
