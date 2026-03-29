@@ -108,6 +108,21 @@ docker compose -f docker-compose.db.yml ps
 
 本專案不保存 OpenAPI snapshot。`openapi-typescript-codegen` 會直接從執行中的 Springdoc endpoint（`http://127.0.0.1:8080/v3/api-docs`）產生。
 
+## 圖片上傳策略（S3 Presigned URL）
+
+建議採用「前端直傳 S3 + 後端僅保存 metadata」模式：
+
+- 後端產生 presigned URL（`/api/uploads/presign`）
+- 前端以 `PUT` 直傳到 S3
+- DB 僅存 `image_key`、`image_url`（不存 blob）
+
+不建議將圖片直接存放在 EC2 本機磁碟做正式環境，因為在部署、擴容與故障替換時檔案不具備一致性與耐久性。
+
+最小必要 AWS 資源：
+
+- 1 個 S3 Bucket（建議啟用 versioning）
+- 1 個供後端使用的 IAM 使用者/角色（最小權限：對 bucket 指定路徑的 `s3:PutObject`、`s3:GetObject`）
+
 ## Auth 規格文件
 
 - [手機註冊與登入流程規格（#001）](./docs/auth/phone-auth-flow-spec.md)
