@@ -76,14 +76,20 @@ jobs:
 
       - name: Configure SSH key
         run: |
+          set -euo pipefail
           mkdir -p ~/.ssh
           chmod 700 ~/.ssh
           echo "${{ secrets.EC2_SSH_PRIVATE_KEY }}" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
-          ssh-keyscan -H "${{ secrets.EC2_HOST }}" >> ~/.ssh/known_hosts
+          if [[ -n "${{ secrets.EC2_SSH_KNOWN_HOSTS }}" ]]; then
+            echo "${{ secrets.EC2_SSH_KNOWN_HOSTS }}" >> ~/.ssh/known_hosts
+          else
+            ssh-keyscan -H "${{ secrets.EC2_HOST }}" >> ~/.ssh/known_hosts
+          fi
 
       - name: Upload deployment manifests
         run: |
+          set -euo pipefail
           ssh "${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}" "mkdir -p ${DEPLOY_PATH}"
           scp -r deploy "${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:${DEPLOY_PATH}/"
 
@@ -91,8 +97,11 @@ jobs:
         env:
           API_IMAGE: ${{ needs.build-and-push.outputs.api_image }}:${{ github.sha }}
           WEB_IMAGE: ${{ needs.build-and-push.outputs.web_image }}:${{ github.sha }}
+          GIT_SHA: ${{ github.sha }}
         run: |
+          set -euo pipefail
           ssh "${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}" \
             "cd ${DEPLOY_PATH}/deploy && \
+             test -f .env.api && \
              echo '${{ secrets.GHCR_READ_TOKEN }}' | docker login ghcr.io -u '${{ github.repository_owner }}' --password-stdin && \
-             API_IMAGE='${API_IMAGE}' WEB_IMAGE='${WEB_IMAGE}' ./ec2/deploy.sh"
+             API_IMAGE='${API_IMAGE}' WEB_IMAGE='${WEB_IMAGE}' GIT_SHA='${GIT_SHA}' ./ec2/deploy.sh"
