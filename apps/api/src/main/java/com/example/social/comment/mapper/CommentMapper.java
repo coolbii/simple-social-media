@@ -88,4 +88,35 @@ public interface CommentMapper {
     )
     @Select("CALL sp_list_comments_by_post(#{postId})")
     List<Comment> listCommentsByPost(@Param("postId") long postId);
+
+    @ConstructorArgs(
+        {
+            @Arg(column = "id", javaType = long.class),
+            @Arg(column = "post_id", javaType = long.class),
+            @Arg(column = "user_id", javaType = long.class),
+            @Arg(column = "user_name", javaType = String.class),
+            @Arg(column = "parent_comment_id", javaType = Long.class),
+            @Arg(column = "content", javaType = String.class),
+            @Arg(column = "created_at", javaType = java.time.Instant.class),
+            @Arg(column = "deleted_at", javaType = java.time.Instant.class)
+        }
+    )
+    @Select(
+        """
+        CALL sp_list_comments_page(
+            #{postId},
+            #{parentCommentId},
+            #{isRoot},
+            #{offset},
+            #{limit}
+        )
+        """
+    )
+    List<Comment> listCommentsPage(
+        @Param("postId") long postId,
+        @Param("parentCommentId") Long parentCommentId,
+        @Param("isRoot") boolean isRoot,
+        @Param("offset") int offset,
+        @Param("limit") int limit
+    );
 }

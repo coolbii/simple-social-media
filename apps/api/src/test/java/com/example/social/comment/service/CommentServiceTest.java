@@ -3,6 +3,7 @@ package com.example.social.comment.service;
 import java.time.Instant;
 import java.util.List;
 
+import com.example.social.comment.dto.CommentPageResponse;
 import com.example.social.comment.dto.CommentResponse;
 import com.example.social.comment.dto.CreateCommentRequest;
 import com.example.social.comment.dto.UpdateCommentRequest;
@@ -56,6 +57,39 @@ class CommentServiceTest {
         assertThat(comments.get(1).parentCommentId()).isEqualTo(1L);
         assertThat(comments.get(1).content()).isEqualTo("Original reply is deleted.");
         assertThat(comments.get(1).deleted()).isTrue();
+    }
+
+    @Test
+    void listCommentsPage_shouldReturnPageAndNextOffset() {
+        when(commentMapper.listCommentsPage(1L, null, true, 0, 3))
+            .thenReturn(
+                List.of(
+                    comment(1L, 1L, 2L, "Alice", null, "first", "2026-03-29T09:01:00Z", null),
+                    comment(2L, 1L, 1L, "Brian", null, "second", "2026-03-29T09:02:00Z", null),
+                    comment(3L, 1L, 3L, "Carol", null, "third", "2026-03-29T09:03:00Z", null)
+                )
+            );
+
+        CommentPageResponse page = commentService.listCommentsPage(1L, null, 0, 2);
+
+        assertThat(page.comments()).hasSize(2);
+        assertThat(page.hasMore()).isTrue();
+        assertThat(page.nextOffset()).isEqualTo(2);
+        assertThat(page.comments().get(0).content()).isEqualTo("first");
+    }
+
+    @Test
+    void listCommentsPage_shouldValidateParentWhenProvided() {
+        when(commentMapper.getCommentById(9L))
+            .thenReturn(comment(9L, 1L, 1L, "Brian", null, "parent", "2026-03-29T09:00:00Z", null));
+        when(commentMapper.listCommentsPage(1L, 9L, false, 0, 2))
+            .thenReturn(List.of(comment(10L, 1L, 2L, "Alice", 9L, "child", "2026-03-29T09:01:00Z", null)));
+
+        CommentPageResponse page = commentService.listCommentsPage(1L, 9L, 0, 1);
+
+        assertThat(page.comments()).hasSize(1);
+        assertThat(page.hasMore()).isFalse();
+        assertThat(page.nextOffset()).isNull();
     }
 
     @Test

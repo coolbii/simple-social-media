@@ -3,6 +3,7 @@ package com.example.social.comment.service;
 import java.util.Comparator;
 import java.util.List;
 
+import com.example.social.comment.dto.CommentPageResponse;
 import com.example.social.comment.dto.CommentResponse;
 import com.example.social.comment.dto.CreateCommentRequest;
 import com.example.social.comment.dto.UpdateCommentRequest;
@@ -19,6 +20,7 @@ import org.springframework.stereotype.Service;
 @Service
 public class CommentService {
 
+    private static final int MAX_PAGE_SIZE = 50;
     private static final String DELETED_PLACEHOLDER = "Original reply is deleted.";
     private static final Logger LOGGER = LoggerFactory.getLogger(CommentService.class);
 
@@ -36,6 +38,39 @@ public class CommentService {
             .sorted(Comparator.comparing(Comment::createdAt))
             .map(this::toResponse)
             .toList();
+    }
+
+    public CommentPageResponse listCommentsPage(long postId, Long parentCommentId, int offset, int limit) {
+        if (offset < 0) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, ErrorCode.VALIDATION_ERROR, "Offset must be >= 0.");
+        }
+        if (limit < 1 || limit > MAX_PAGE_SIZE) {
+            throw new ApiException(
+                HttpStatus.BAD_REQUEST,
+                ErrorCode.VALIDATION_ERROR,
+                "Limit must be between 1 and " + MAX_PAGE_SIZE + "."
+            );
+        }
+
+        if (parentCommentId != null) {
+            ensureParentCommentExists(postId, parentCommentId);
+        }
+
+        int queryLimit = Math.min(limit + 1, MAX_PAGE_SIZE + 1);
+        List<Comment> fetched = commentMapper.listCommentsPage(
+            postId,
+            parentCommentId,
+            parentCommentId == null,
+            offset,
+            queryLimit
+        );
+        boolean hasMore = fetched.size() > limit;
+        List<CommentResponse> page = fetched.stream()
+            .limit(limit)
+            .map(this::toResponse)
+            .toList();
+        Integer nextOffset = hasMore ? offset + page.size() : null;
+        return new CommentPageResponse(page, hasMore, nextOffset);
     }
 
     public CommentResponse createComment(long postId, CreateCommentRequest request, long actorUserId) {

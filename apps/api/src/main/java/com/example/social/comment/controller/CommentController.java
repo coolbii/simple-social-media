@@ -3,6 +3,7 @@ package com.example.social.comment.controller;
 import java.util.List;
 
 import com.example.social.auth.service.AuthService;
+import com.example.social.comment.dto.CommentPageResponse;
 import com.example.social.comment.dto.CommentResponse;
 import com.example.social.comment.dto.CreateCommentRequest;
 import com.example.social.comment.dto.UpdateCommentRequest;
@@ -21,6 +22,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
@@ -46,6 +48,17 @@ public class CommentController {
     @Operation(operationId = "listCommentsByPost", summary = "Return comments for a post.")
     public ApiResponse<List<CommentResponse>> listComments(@PathVariable long postId) {
         return ApiResponse.ok(commentService.listComments(postId));
+    }
+
+    @GetMapping("/page")
+    @Operation(operationId = "listCommentsPage", summary = "Return paged comments for a post thread node.")
+    public ApiResponse<CommentPageResponse> listCommentsPage(
+        @PathVariable long postId,
+        @RequestParam(required = false) Long parentCommentId,
+        @RequestParam(defaultValue = "0") int offset,
+        @RequestParam(defaultValue = "5") int limit
+    ) {
+        return ApiResponse.ok(commentService.listCommentsPage(postId, parentCommentId, offset, limit));
     }
 
     @PostMapping
