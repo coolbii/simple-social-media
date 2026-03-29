@@ -5,7 +5,6 @@
 import type { ApiResponseLoginResponse } from '../models/ApiResponseLoginResponse';
 import type { ApiResponseLogoutResponse } from '../models/ApiResponseLogoutResponse';
 import type { ApiResponseMeResponse } from '../models/ApiResponseMeResponse';
-import type { ApiResponseRefreshResponse } from '../models/ApiResponseRefreshResponse';
 import type { ApiResponseRegisterResponse } from '../models/ApiResponseRegisterResponse';
 import type { ApiResponseSendCodeResponse } from '../models/ApiResponseSendCodeResponse';
 import type { ApiResponseVerifyCodeResponse } from '../models/ApiResponseVerifyCodeResponse';
@@ -32,17 +31,6 @@ export class AuthService {
             url: '/api/auth/register',
             body: requestBody,
             mediaType: 'application/json',
-        });
-    }
-    /**
-     * Rotate the refresh token and return a new access token.
-     * @returns ApiResponseRefreshResponse OK
-     * @throws ApiError
-     */
-    public static authRefresh(): CancelablePromise<ApiResponseRefreshResponse> {
-        return __request(OpenAPI, {
-            method: 'POST',
-            url: '/api/auth/refresh',
         });
     }
     /**
@@ -80,7 +68,7 @@ export class AuthService {
         });
     }
     /**
-     * Clear the refresh cookie for the current session.
+     * Clear the session cookie for the current session.
      * @returns ApiResponseLogoutResponse OK
      * @throws ApiError
      */
@@ -108,21 +96,14 @@ export class AuthService {
         });
     }
     /**
-     * Return the current scaffold user profile.
+     * Return the current user profile from session.
      * @returns ApiResponseMeResponse OK
      * @throws ApiError
      */
-    public static authMe({
-        authorization,
-    }: {
-        authorization?: string,
-    }): CancelablePromise<ApiResponseMeResponse> {
+    public static authMe(): CancelablePromise<ApiResponseMeResponse> {
         return __request(OpenAPI, {
             method: 'GET',
             url: '/api/auth/me',
-            headers: {
-                'Authorization': authorization,
-            },
         });
     }
 }

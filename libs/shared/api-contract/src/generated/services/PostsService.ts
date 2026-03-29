@@ -81,7 +81,7 @@ export class PostsService {
         });
     }
     /**
-     * Create a post for the scaffold user.
+     * Create a post for the authenticated user.
      * @returns ApiResponsePostResponse OK
      * @throws ApiError
      */

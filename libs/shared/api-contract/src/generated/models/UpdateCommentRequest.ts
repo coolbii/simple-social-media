@@ -2,8 +2,7 @@
 /* istanbul ignore file */
 /* tslint:disable */
 /* eslint-disable */
-export type RefreshResponse = {
-    accessToken?: string;
-    expiresIn?: number;
+export type UpdateCommentRequest = {
+    content: string;
 };
 

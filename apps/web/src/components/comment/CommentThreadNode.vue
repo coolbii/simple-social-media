@@ -10,7 +10,7 @@ const props = defineProps<{
   comment: CommentItem;
   depth: number;
   childrenByParent: Record<string, CommentItem[]>;
-  visibleCountByParent: Record<string, number>;
+  pageStateByParent: Record<string, { loaded: boolean; hasMore: boolean; loading: boolean; nextOffset: number }>;
   canReply: boolean;
   currentUserId: number | null;
   activeReplyId: number | null;
@@ -31,10 +31,29 @@ const emit = defineEmits<{
 
 const childKey = computed(() => String(props.comment.id));
 const allChildren = computed(() => props.childrenByParent[childKey.value] ?? []);
-const visibleCount = computed(() => props.visibleCountByParent[childKey.value] ?? 5);
-const visibleChildren = computed(() => allChildren.value.slice(0, visibleCount.value));
-const hasMoreChildren = computed(() => allChildren.value.length > visibleCount.value);
-const remainingChildren = computed(() => allChildren.value.length - visibleCount.value);
+const visibleChildren = computed(() => allChildren.value);
+const childPageState = computed(() => {
+  return (
+    props.pageStateByParent[childKey.value] ?? {
+      loaded: false,
+      hasMore: true,
+      loading: false,
+      nextOffset: 0,
+    }
+  );
+});
+const canLoadChildren = computed(() => {
+  return childPageState.value.loading || !childPageState.value.loaded || childPageState.value.hasMore;
+});
+const loadChildrenLabel = computed(() => {
+  if (childPageState.value.loading) {
+    return '載入中…';
+  }
+  if (!childPageState.value.loaded) {
+    return '載入回覆';
+  }
+  return '顯示更多回覆';
+});
 const isOwnComment = computed(() => props.currentUserId !== null && props.comment.userId === props.currentUserId);
 const isReplying = computed(() => props.activeReplyId === props.comment.id);
 const isEditing = computed(() => props.activeEditId === props.comment.id);
@@ -159,14 +178,14 @@ function onSubmitEdit() {
       </div>
     </div>
 
-    <div v-if="visibleChildren.length > 0" class="children">
+    <div v-if="visibleChildren.length > 0 || canLoadChildren" class="children">
       <CommentThreadNode
         v-for="child in visibleChildren"
         :key="child.id"
         :comment="child"
         :depth="depth + 1"
         :children-by-parent="childrenByParent"
-        :visible-count-by-parent="visibleCountByParent"
+        :page-state-by-parent="pageStateByParent"
         :can-reply="canReply"
         :current-user-id="currentUserId"
         :active-reply-id="activeReplyId"
@@ -182,12 +201,13 @@ function onSubmitEdit() {
         @load-more="emit('loadMore', $event)"
       />
       <button
-        v-if="hasMoreChildren"
+        v-if="canLoadChildren"
         type="button"
         class="action-btn load-more-btn"
+        :disabled="childPageState.loading"
         @click="emit('loadMore', comment.id)"
       >
-        顯示更多回覆（{{ remainingChildren }}）
+        {{ loadChildrenLabel }}
       </button>
     </div>
   </article>

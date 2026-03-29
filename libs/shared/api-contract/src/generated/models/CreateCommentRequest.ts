@@ -4,5 +4,6 @@
 /* eslint-disable */
 export type CreateCommentRequest = {
     content: string;
+    parentCommentId?: number;
 };
 

@@ -22,7 +22,7 @@ import {
   type VerifyCodeResponse,
 } from '@simple-social-media/api-contract';
 import { resolveApiBaseUrl } from '@simple-social-media/utils';
-import type { CommentItem, LoginResponse, PostItem, UserSummary } from '../types';
+import type { CommentItem, CommentPage, LoginResponse, PostItem, UserSummary } from '../types';
 
 OpenAPI.BASE = resolveApiBaseUrl();
 OpenAPI.WITH_CREDENTIALS = true;
@@ -197,6 +197,29 @@ export async function fetchComments(postId: number): Promise<CommentItem[]> {
   return response.map(toCommentItem);
 }
 
+export async function fetchCommentPage(
+  postId: number,
+  payload: { parentCommentId?: number | null; offset?: number; limit?: number }
+): Promise<CommentPage> {
+  try {
+    const data = await withAuth<{ comments?: CommentResponse[]; hasMore?: boolean; nextOffset?: number }>(() =>
+      CommentsService.listCommentsPage({
+        postId,
+        parentCommentId: payload.parentCommentId ?? undefined,
+        offset: payload.offset ?? 0,
+        limit: payload.limit ?? 5,
+      })
+    );
+    return {
+      comments: Array.isArray(data.comments) ? data.comments.map(toCommentItem) : [],
+      hasMore: data.hasMore === true,
+      nextOffset: typeof data.nextOffset === 'number' ? data.nextOffset : null,
+    };
+  } catch (error) {
+    rethrowApiError(error);
+  }
+}
+
 export async function createComment(
   postId: number,
   payload: { content: string; parentCommentId?: number | null }
@@ -208,30 +231,12 @@ export async function createComment(
 }
 
 export async function deleteComment(postId: number, commentId: number): Promise<CommentItem> {
-  const url = OpenAPI.BASE
-    ? `${OpenAPI.BASE}/api/posts/${postId}/comments/${commentId}`
-    : `/api/posts/${postId}/comments/${commentId}`;
-
-  const response = await fetch(url, {
-    method: 'DELETE',
-    credentials: 'include',
-  });
-
-  const payload = await response.json().catch(() => null);
-  if (!response.ok) {
-    const message =
-      typeof payload?.error?.message === 'string' && payload.error.message.trim().length > 0
-        ? payload.error.message
-        : 'Delete comment failed. Please try again.';
-    throw new Error(message);
+  try {
+    const data = await withAuth<CommentResponse>(() => CommentsService.deleteComment({ postId, commentId }));
+    return toCommentItem(data);
+  } catch (error) {
+    rethrowApiError(error);
   }
-
-  const data = payload?.data as CommentResponse | undefined;
-  if (!data) {
-    throw new Error('Delete comment response missing data.');
-  }
-
-  return toCommentItem(data);
 }
 
 export async function updateComment(
@@ -239,33 +244,14 @@ export async function updateComment(
   commentId: number,
   payload: { content: string }
 ): Promise<CommentItem> {
-  const url = OpenAPI.BASE
-    ? `${OpenAPI.BASE}/api/posts/${postId}/comments/${commentId}`
-    : `/api/posts/${postId}/comments/${commentId}`;
-
-  const response = await fetch(url, {
-    method: 'PUT',
-    credentials: 'include',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(payload),
-  });
-
-  const body = await response.json().catch(() => null);
-  if (!response.ok) {
-    const message =
-      typeof body?.error?.message === 'string' && body.error.message.trim().length > 0
-        ? body.error.message
-        : 'Update comment failed. Please try again.';
-    throw new Error(message);
+  try {
+    const data = await withAuth<CommentResponse>(() =>
+      CommentsService.updateComment({ postId, commentId, requestBody: payload })
+    );
+    return toCommentItem(data);
+  } catch (error) {
+    rethrowApiError(error);
   }
-
-  const data = body?.data as CommentResponse | undefined;
-  if (!data) {
-    throw new Error('Update comment response missing data.');
-  }
-  return toCommentItem(data);
 }
 
 export async function uploadPostImage(file: File): Promise<string> {

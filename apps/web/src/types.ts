@@ -43,3 +43,9 @@ export interface CommentCreatedEvent {
   postId: number;
   comment: CommentItem;
 }
+
+export interface CommentPage {
+  comments: CommentItem[];
+  hasMore: boolean;
+  nextOffset: number | null;
+}

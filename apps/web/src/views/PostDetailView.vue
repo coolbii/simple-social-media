@@ -6,7 +6,7 @@ import {
   createComment,
   deletePost,
   deleteComment,
-  fetchComments,
+  fetchCommentPage,
   fetchPost,
   updateComment,
   updatePost,
@@ -19,12 +19,24 @@ const route = useRoute();
 const router = useRouter();
 const authStore = useAuthStore();
 const MAX_POST_CONTENT_LENGTH = 500;
+const COMMENT_PAGE_SIZE = 5;
+const DEFAULT_PAGE_STATE = {
+  loaded: false,
+  hasMore: true,
+  loading: false,
+  nextOffset: 0,
+};
 
 const post = ref<PostItem | null>(null);
-const comments = ref<CommentItem[]>([]);
+const commentsById = ref<Record<number, CommentItem>>({});
+const childIdsByParent = ref<Record<string, number[]>>({ root: [] });
+const pageStateByParent = ref<
+  Record<string, { loaded: boolean; hasMore: boolean; loading: boolean; nextOffset: number }>
+>({
+  root: { ...DEFAULT_PAGE_STATE },
+});
 const commentDraft = ref('');
 const replyTargetId = ref<number | null>(null);
-const visibleCountByParent = ref<Record<string, number>>({ root: 5 });
 const errorMessage = ref('');
 const isSubmitting = ref(false);
 const deletingCommentId = ref<number | null>(null);
@@ -42,85 +54,137 @@ const isPostOwner = computed(() => {
   return post.value !== null && currentUserId.value !== null && post.value.userId === currentUserId.value;
 });
 
-const sortedComments = computed(() => {
-  return [...comments.value].sort((a, b) => {
-    const createdAtCompare = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
-    return createdAtCompare !== 0 ? createdAtCompare : a.id - b.id;
-  });
-});
-
 const childrenByParent = computed<Record<string, CommentItem[]>>(() => {
-  const grouped: Record<string, CommentItem[]> = { root: [] };
-  const existingIds = new Set(sortedComments.value.map((comment) => comment.id));
-
-  for (const comment of sortedComments.value) {
-    const parentId = comment.parentCommentId ?? null;
-    const resolvedParentId = parentId !== null && existingIds.has(parentId) ? parentId : null;
-    const parentKey = resolvedParentId === null ? 'root' : String(resolvedParentId);
-
-    if (!grouped[parentKey]) {
-      grouped[parentKey] = [];
-    }
-    grouped[parentKey].push(comment);
+  const grouped: Record<string, CommentItem[]> = {};
+  for (const [parentKey, commentIds] of Object.entries(childIdsByParent.value)) {
+    grouped[parentKey] = commentIds
+      .map((commentId) => commentsById.value[commentId])
+      .filter((comment): comment is CommentItem => comment !== undefined);
   }
-
+  if (!grouped.root) {
+    grouped.root = [];
+  }
   return grouped;
 });
 
-const rootVisibleCount = computed(() => visibleCountByParent.value.root ?? 5);
-const rootComments = computed(() => (childrenByParent.value.root ?? []).slice(0, rootVisibleCount.value));
-const hasMoreRootComments = computed(() => (childrenByParent.value.root?.length ?? 0) > rootVisibleCount.value);
-const remainingRootComments = computed(() => (childrenByParent.value.root?.length ?? 0) - rootVisibleCount.value);
-
-watch(
-  childrenByParent,
-  (grouped) => {
-    const next = { ...visibleCountByParent.value };
-    let changed = false;
-
-    if (next.root === undefined) {
-      next.root = 5;
-      changed = true;
-    }
-
-    for (const parentKey of Object.keys(grouped)) {
-      if (next[parentKey] === undefined) {
-        next[parentKey] = 5;
-        changed = true;
-      }
-    }
-
-    if (changed) {
-      visibleCountByParent.value = next;
-    }
-  },
-  { immediate: true }
-);
+const loadedCommentCount = computed(() => Object.keys(commentsById.value).length);
+const rootComments = computed(() => childrenByParent.value.root ?? []);
+const rootPageState = computed(() => {
+  return pageStateByParent.value.root ?? { ...DEFAULT_PAGE_STATE };
+});
+const hasMoreRootComments = computed(() => rootPageState.value.hasMore);
+const isLoadingRootComments = computed(() => rootPageState.value.loading);
 
 let stream: EventSource | null = null;
 
-function upsertComment(nextComment: CommentItem) {
-  const existingIndex = comments.value.findIndex((comment) => comment.id === nextComment.id);
-  if (existingIndex >= 0) {
-    const next = [...comments.value];
-    next[existingIndex] = nextComment;
-    comments.value = next;
-    return;
-  }
-  comments.value = [...comments.value, nextComment];
+function parentKey(parentCommentId: number | null): string {
+  return parentCommentId === null ? 'root' : String(parentCommentId);
 }
 
-function resetVisibleCounts() {
-  visibleCountByParent.value = { root: 5 };
+function readPageState(key: string) {
+  return pageStateByParent.value[key] ?? { ...DEFAULT_PAGE_STATE };
+}
+
+function writePageState(
+  key: string,
+  nextState: { loaded: boolean; hasMore: boolean; loading: boolean; nextOffset: number }
+) {
+  pageStateByParent.value = {
+    ...pageStateByParent.value,
+    [key]: nextState,
+  };
+}
+
+function mergeComment(nextComment: CommentItem, forceVisible = false) {
+  commentsById.value = {
+    ...commentsById.value,
+    [nextComment.id]: nextComment,
+  };
+
+  const key = parentKey(nextComment.parentCommentId ?? null);
+  const state = readPageState(key);
+  const shouldAttach = forceVisible || key === 'root' || state.loaded;
+  if (!shouldAttach) {
+    return;
+  }
+
+  const existingIds = childIdsByParent.value[key] ?? [];
+  if (existingIds.includes(nextComment.id)) {
+    return;
+  }
+  childIdsByParent.value = {
+    ...childIdsByParent.value,
+    [key]: [...existingIds, nextComment.id],
+  };
+}
+
+function resetThreadState() {
+  commentsById.value = {};
+  childIdsByParent.value = { root: [] };
+  pageStateByParent.value = { root: { ...DEFAULT_PAGE_STATE } };
+}
+
+async function loadCommentPage(parentCommentId: number | null, options?: { reset?: boolean }) {
+  const reset = options?.reset === true;
+  const key = parentKey(parentCommentId);
+  const currentState = readPageState(key);
+
+  if (currentState.loading) {
+    return;
+  }
+  if (!reset && currentState.loaded && !currentState.hasMore) {
+    return;
+  }
+
+  const offset = reset ? 0 : currentState.nextOffset;
+  writePageState(key, {
+    ...currentState,
+    loading: true,
+    nextOffset: offset,
+  });
+
+  try {
+    const page = await fetchCommentPage(postId.value, {
+      parentCommentId,
+      offset,
+      limit: COMMENT_PAGE_SIZE,
+    });
+
+    const nextCommentsById = { ...commentsById.value };
+    const nextIds = reset ? [] : [...(childIdsByParent.value[key] ?? [])];
+    for (const comment of page.comments) {
+      nextCommentsById[comment.id] = comment;
+      if (!nextIds.includes(comment.id)) {
+        nextIds.push(comment.id);
+      }
+    }
+
+    commentsById.value = nextCommentsById;
+    childIdsByParent.value = {
+      ...childIdsByParent.value,
+      [key]: nextIds,
+    };
+    writePageState(key, {
+      loaded: true,
+      hasMore: page.hasMore,
+      loading: false,
+      nextOffset: page.nextOffset ?? offset + page.comments.length,
+    });
+  } catch (error) {
+    writePageState(key, {
+      ...currentState,
+      loading: false,
+    });
+    throw error;
+  }
 }
 
 function loadMoreReplies(parentCommentId: number | null) {
-  const parentKey = parentCommentId === null ? 'root' : String(parentCommentId);
-  const current = visibleCountByParent.value[parentKey] ?? 5;
-  visibleCountByParent.value = {
-    ...visibleCountByParent.value,
-    [parentKey]: current + 5,
-  };
+  void loadCommentPage(parentCommentId).catch((error) => {
+    console.error(error);
+    errorMessage.value =
+      error instanceof Error ? error.message : 'Comment feed is unavailable until the backend is running.';
+  });
 }
 
 async function loadPost() {
@@ -197,15 +261,6 @@ async function removePost() {
   }
 }
 
-async function loadComments() {
-  try {
-    comments.value = await fetchComments(postId.value);
-  } catch (error) {
-    console.error(error);
-    errorMessage.value = 'Comment feed is unavailable until the backend is running.';
-  }
-}
-
 function connectStream() {
   stream?.close();
   stream = new EventSource(resolveSseUrl(`/api/posts/${postId.value}/comments/stream`), {
@@ -217,11 +272,14 @@ function connectStream() {
     if (payload.postId !== postId.value) {
       return;
     }
-    upsertComment(payload.comment);
+    mergeComment(payload.comment, true);
   });
 
   stream.onerror = () => {
-    void loadComments();
+    void loadCommentPage(null, { reset: true }).catch((error) => {
+      console.error(error);
+      errorMessage.value = 'Comment feed is unavailable until the backend is running.';
+    });
   };
 }
 
@@ -236,7 +294,7 @@ async function submitComment() {
       content: commentDraft.value.trim(),
       parentCommentId: null,
     });
-    upsertComment(created);
+    mergeComment(created, true);
     commentDraft.value = '';
   } catch (error) {
     console.error(error);
@@ -249,7 +307,7 @@ async function submitComment() {
 async function submitReply(parentCommentId: number, content: string) {
   try {
     const created = await createComment(postId.value, { content, parentCommentId });
-    upsertComment(created);
+    mergeComment(created, true);
     replyTargetId.value = null;
   } catch (error) {
     console.error(error);
@@ -265,7 +323,7 @@ async function removeComment(commentId: number) {
   deletingCommentId.value = commentId;
   try {
     const deletedComment = await deleteComment(postId.value, commentId);
-    upsertComment(deletedComment);
+    mergeComment(deletedComment, true);
     if (replyTargetId.value === commentId) {
       replyTargetId.value = null;
     }
@@ -296,7 +354,7 @@ async function submitEditComment(commentId: number, content: string) {
   isUpdatingComment.value = true;
   try {
     const updated = await updateComment(postId.value, commentId, { content });
-    upsertComment(updated);
+    mergeComment(updated, true);
     editingCommentId.value = null;
   } catch (error) {
     console.error(error);
@@ -323,9 +381,12 @@ watch(
     isEditingPost.value = false;
     editPostDraft.value = '';
     postActionError.value = '';
-    resetVisibleCounts();
+    resetThreadState();
     void loadPost();
-    void loadComments();
+    void loadCommentPage(null, { reset: true }).catch((error) => {
+      console.error(error);
+      errorMessage.value = 'Comment feed is unavailable until the backend is running.';
+    });
     connectStream();
   },
   { immediate: true }
@@ -384,7 +445,7 @@ onBeforeUnmount(() => {
     <div class="comments-header">
       <div>
         <p class="detail-label">Realtime comments</p>
-        <h2>{{ comments.length }} comment(s)</h2>
+        <h2>{{ loadedCommentCount }} loaded comment(s)</h2>
       </div>
       <span class="stream-pill">SSE stream open</span>
     </div>
@@ -409,7 +470,7 @@ onBeforeUnmount(() => {
       :comment="comment"
       :depth="0"
       :children-by-parent="childrenByParent"
-      :visible-count-by-parent="visibleCountByParent"
+      :page-state-by-parent="pageStateByParent"
       :can-reply="authStore.isAuthenticated"
       :current-user-id="currentUserId"
       :active-reply-id="replyTargetId"
@@ -425,8 +486,14 @@ onBeforeUnmount(() => {
       @load-more="loadMoreReplies"
     />
 
-    <button v-if="hasMoreRootComments" type="button" class="load-more-root" @click="loadMoreReplies(null)">
-      Load more comments ({{ remainingRootComments }})
+    <button
+      v-if="hasMoreRootComments || isLoadingRootComments"
+      type="button"
+      class="load-more-root"
+      :disabled="isLoadingRootComments"
+      @click="loadMoreReplies(null)"
+    >
+      {{ isLoadingRootComments ? '載入中…' : 'Load more comments' }}
     </button>
   </section>
 </template>
@@ -587,6 +654,11 @@ textarea:focus {
   color: #0f766e;
   cursor: pointer;
   font-weight: 700;
+}
+
+.load-more-root:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .empty-state {
