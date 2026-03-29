@@ -1,6 +1,7 @@
 package com.example.social.sse.service;
 
 import java.io.IOException;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -13,7 +14,7 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 @Service
 public class CommentStreamService {
 
-    private final Map<Long, CopyOnWriteArrayList<SseEmitter>> emitters = new ConcurrentHashMap<>();
+    private final Map<Long, List<SseEmitter>> emitters = new ConcurrentHashMap<>();
 
     public SseEmitter subscribe(long postId) {
         SseEmitter emitter = new SseEmitter(0L);
@@ -41,7 +42,7 @@ public class CommentStreamService {
     }
 
     private void removeEmitter(long postId, SseEmitter emitter) {
-        CopyOnWriteArrayList<SseEmitter> postEmitters = emitters.get(postId);
+        List<SseEmitter> postEmitters = emitters.get(postId);
         if (postEmitters == null) {
             return;
         }

@@ -88,7 +88,7 @@ public class CommentService {
         CommentResponse response = toResponse(created);
         try {
             commentStreamService.publish(postId, response);
-        } catch (RuntimeException exception) {
+        } catch (RuntimeException exception) { // NOPMD AvoidCatchingGenericException - SSE push is best-effort
             // Comment persistence is the source of truth; SSE push is best-effort.
             LOGGER.warn("Failed to publish comment stream event for post {}", postId, exception);
         }

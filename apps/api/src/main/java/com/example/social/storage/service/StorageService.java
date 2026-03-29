@@ -14,6 +14,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
+import software.amazon.awssdk.core.exception.SdkException;
 import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.regions.Region;
@@ -142,7 +143,7 @@ public class StorageService {
                 "Failed to read file for upload.",
                 exception
             );
-        } catch (Exception exception) {
+        } catch (SdkException exception) {
             throw new ApiException(
                 HttpStatus.SERVICE_UNAVAILABLE,
                 ErrorCode.UPLOAD_STORAGE_UNAVAILABLE,
@@ -220,7 +221,7 @@ public class StorageService {
             }
 
             return path.startsWith("/") ? path.substring(1) : path;
-        } catch (Exception exception) {
+        } catch (IllegalArgumentException exception) {
             return null;
         }
     }

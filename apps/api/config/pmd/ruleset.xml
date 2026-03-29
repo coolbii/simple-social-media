@@ -16,9 +16,13 @@
   <rule ref="category/java/bestpractices.xml">
     <!-- SLF4J evaluates lazily — no guard needed -->
     <exclude name="GuardLogStatement"/>
-    <!-- Integration tests often need many assertions -->
+    <!-- Integration tests often need many assertions (PMD 6 + 7 names) -->
     <exclude name="JUnitTestContainsTooManyAsserts"/>
+    <exclude name="UnitTestContainsTooManyAsserts"/>
     <exclude name="JUnitAssertionsShouldIncludeMessage"/>
+    <!-- Spring @SpringBootTest context-load tests don't need explicit asserts -->
+    <exclude name="JUnitTestsShouldIncludeAssert"/>
+    <exclude name="UnitTestShouldIncludeAssert"/>
     <!-- Spring beans use field/constructor injection, not accessors -->
     <exclude name="AccessorClassGeneration"/>
     <exclude name="AccessorMethodGeneration"/>
@@ -39,6 +43,11 @@
     <exclude name="ShortClassName"/>
     <!-- Avoid micromanaging import order here (Checkstyle handles ordering) -->
     <exclude name="UnnecessaryFullyQualifiedName"/>
+    <!-- Too noisy — val/var style; not idiomatic in Spring Boot projects -->
+    <exclude name="MethodArgumentCouldBeFinal"/>
+    <exclude name="LocalVariableCouldBeFinal"/>
+    <!-- Mockito + AssertJ require many static imports in test classes -->
+    <exclude name="TooManyStaticImports"/>
   </rule>
 
   <!-- ═══ Design ══════════════════════════════════════════════════════ -->
@@ -47,14 +56,23 @@
     <exclude name="LawOfDemeter"/>
     <!-- Package coupling analysis is noisy without module boundaries -->
     <exclude name="LoosePackageCoupling"/>
+    <!-- Test classes naturally have many test methods -->
+    <exclude name="TooManyMethods"/>
+    <!-- MyBatis mapper methods use direct params by design -->
+    <exclude name="UseObjectForClearerAPI"/>
+    <!-- Spring service classes naturally import many types -->
+    <exclude name="ExcessiveImports"/>
+    <!-- Spring services coordinate many components -->
+    <exclude name="CouplingBetweenObjects"/>
   </rule>
 
   <!-- ═══ Error Prone ═════════════════════════════════════════════════ -->
   <rule ref="category/java/errorprone.xml">
     <!-- Null assignments can be intentional (e.g. clearing references) -->
     <exclude name="NullAssignment"/>
-    <!-- Deprecated / very noisy in Java 21 -->
-    <exclude name="DataflowAnomalyAnalysis"/>
+    <!-- DataflowAnomalyAnalysis was removed in PMD 7 -->
+    <!-- SQL column names and test data are naturally repeated -->
+    <exclude name="AvoidDuplicateLiterals"/>
   </rule>
 
   <!-- ═══ Performance ═════════════════════════════════════════════════ -->

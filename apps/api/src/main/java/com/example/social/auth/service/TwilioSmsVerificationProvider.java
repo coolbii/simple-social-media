@@ -11,6 +11,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
+import org.springframework.web.client.RestClientException;
 
 import com.example.social.common.exception.ApiException;
 import com.example.social.common.exception.ErrorCode;
@@ -68,9 +69,7 @@ public class TwilioSmsVerificationProvider implements SmsVerificationProvider {
                     required(response, "status"),
                     Instant.now().plusSeconds(300)
             );
-        } catch (ApiException exception) {
-            throw exception;
-        } catch (Exception exception) {
+        } catch (RestClientException exception) {
             throw new ApiException(
                     HttpStatus.SERVICE_UNAVAILABLE,
                     ErrorCode.AUTH_TWILIO_UNAVAILABLE,
@@ -100,9 +99,7 @@ public class TwilioSmsVerificationProvider implements SmsVerificationProvider {
                     status,
                     "approved".equalsIgnoreCase(status)
             );
-        } catch (ApiException exception) {
-            throw exception;
-        } catch (Exception exception) {
+        } catch (RestClientException exception) {
             throw new ApiException(
                     HttpStatus.SERVICE_UNAVAILABLE,
                     ErrorCode.AUTH_TWILIO_UNAVAILABLE,

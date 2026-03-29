@@ -48,6 +48,7 @@ public class AuthService {
     @Value("${app.auth.sms.provider:mock}")
     private String smsProviderName;
     @Value("${app.auth.refresh-token-ttl-seconds:2592000}")
+    @SuppressWarnings("PMD.AvoidFieldNameMatchingMethodName")
     private long refreshTokenTtlSeconds;
     @Value("${app.auth.registration-token-ttl-seconds:600}")
     private long registrationTokenTtlSeconds;
@@ -98,6 +99,7 @@ public class AuthService {
         return new SendCodeResponse(verification.requestId(), expiresIn);
     }
 
+    @SuppressWarnings("PMD.CyclomaticComplexity")
     public VerifyCodeResponse verifyCode(VerifyCodeRequest request) {
         String phoneNumber = normalizePhoneNumber(request.phoneNumber());
         PhoneVerificationRequestRecord verification = authVerificationMapper.findLatestVerificationByPhone(phoneNumber);
@@ -155,6 +157,7 @@ public class AuthService {
         return new VerifyCodeResponse(registrationToken, registrationTokenTtlSeconds);
     }
 
+    @SuppressWarnings("PMD.CyclomaticComplexity")
     public RegisterResponse register(RegisterRequest request) {
         String phoneNumber = normalizePhoneNumber(request.phoneNumber());
         RegistrationTokenRecord token = authVerificationMapper.findRegistrationTokenByHash(
@@ -200,7 +203,8 @@ public class AuthService {
             throw new ApiException(
                 HttpStatus.CONFLICT,
                 ErrorCode.AUTH_PHONE_ALREADY_REGISTERED,
-                "A user with this phone number already exists."
+                "A user with this phone number already exists.",
+                exception
             );
         }
 
@@ -245,6 +249,7 @@ public class AuthService {
         }
     }
 
+    @SuppressWarnings("PMD.ShortMethodName")
     public MeResponse me(String rawSessionToken) {
         AuthenticatedUser currentUser = requireAuthenticatedUser(rawSessionToken);
 

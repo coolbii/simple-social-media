@@ -26,4 +26,22 @@
     <Package name="~.*\.generated\..*"/>
   </Match>
 
+  <!-- Spring beans validate config in constructors — intentional -->
+  <Match>
+    <Bug pattern="CT_CONSTRUCTOR_THROW"/>
+  </Match>
+
+  <!-- Java records and DTOs intentionally expose internal state -->
+  <Match>
+    <Bug pattern="EI_EXPOSE_REP"/>
+  </Match>
+  <Match>
+    <Bug pattern="EI_EXPOSE_REP2"/>
+  </Match>
+
+  <!-- Intentional duplicate branches in validation logic -->
+  <Match>
+    <Bug pattern="DB_DUPLICATE_BRANCHES"/>
+  </Match>
+
 </FindBugsFilter>

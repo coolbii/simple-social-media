@@ -34,7 +34,6 @@ class AuthServiceTest {
 
     private PasswordEncoder passwordEncoder;
     private UserMapper userMapper;
-    private RefreshTokenMapper refreshTokenMapper;
     private AuthVerificationMapper authVerificationMapper;
     private SmsVerificationProvider smsVerificationProvider;
     private AuthService authService;
@@ -43,7 +42,7 @@ class AuthServiceTest {
     void setUp() {
         passwordEncoder = mock(PasswordEncoder.class);
         userMapper = mock(UserMapper.class);
-        refreshTokenMapper = mock(RefreshTokenMapper.class);
+        RefreshTokenMapper refreshTokenMapper = mock(RefreshTokenMapper.class);
         authVerificationMapper = mock(AuthVerificationMapper.class);
         smsVerificationProvider = mock(SmsVerificationProvider.class);
 
@@ -61,11 +60,12 @@ class AuthServiceTest {
     }
 
     @Test
-    void sendCode_shouldPersistVerificationRequestInDatabase() {
+    void sendCodeShouldPersistVerificationRequestInDatabase() {
         Instant expiresAt = Instant.now().plusSeconds(300);
         when(smsVerificationProvider.sendCode("+886905767109"))
             .thenReturn(new VerificationStartResult("request-1", "pending", expiresAt));
-        when(authVerificationMapper.createPhoneVerificationRequest(anyString(), anyString(), anyString(), anyString(), any()))
+        when(authVerificationMapper.createPhoneVerificationRequest(
+            anyString(), anyString(), anyString(), anyString(), any()))
             .thenReturn(10L);
 
         SendCodeResponse response = authService.sendCode(new SendCodeRequest("0905767109"));
@@ -82,7 +82,7 @@ class AuthServiceTest {
     }
 
     @Test
-    void verifyCode_shouldUpdateAttemptCountWhenCodeInvalid() {
+    void verifyCodeShouldUpdateAttemptCountWhenCodeInvalid() {
         when(authVerificationMapper.findLatestVerificationByPhone("+886905767109"))
             .thenReturn(
                 new PhoneVerificationRequestRecord(
@@ -112,7 +112,7 @@ class AuthServiceTest {
     }
 
     @Test
-    void verifyCode_shouldCreateRegistrationTokenWhenApproved() {
+    void verifyCodeShouldCreateRegistrationTokenWhenApproved() {
         when(authVerificationMapper.findLatestVerificationByPhone("+886905767109"))
             .thenReturn(
                 new PhoneVerificationRequestRecord(
@@ -142,7 +142,7 @@ class AuthServiceTest {
     }
 
     @Test
-    void register_shouldRejectWhenTokenAlreadyConsumed() {
+    void registerShouldRejectWhenTokenAlreadyConsumed() {
         when(authVerificationMapper.findRegistrationTokenByHash(anyString()))
             .thenReturn(
                 new RegistrationTokenRecord(
@@ -158,7 +158,8 @@ class AuthServiceTest {
 
         ApiException exception = assertThrows(
             ApiException.class,
-            () -> authService.register(new RegisterRequest("reg-token", "0905767109", "Brian", "password123", "b@example.com"))
+            () -> authService.register(
+                new RegisterRequest("reg-token", "0905767109", "Brian", "password123", "b@example.com"))
         );
 
         assertThat(exception.getStatus()).isEqualTo(HttpStatus.UNAUTHORIZED);
@@ -166,7 +167,7 @@ class AuthServiceTest {
     }
 
     @Test
-    void register_shouldConsumeTokenAfterSuccessfulRegistration() {
+    void registerShouldConsumeTokenAfterSuccessfulRegistration() {
         when(authVerificationMapper.findRegistrationTokenByHash(anyString()))
             .thenReturn(
                 new RegistrationTokenRecord(

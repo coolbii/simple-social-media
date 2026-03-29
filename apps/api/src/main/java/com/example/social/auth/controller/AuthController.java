@@ -93,6 +93,7 @@ public class AuthController {
 
     @GetMapping("/me")
     @Operation(operationId = "authMe", summary = "Return the current user profile from session.")
+    @SuppressWarnings("PMD.ShortMethodName")
     public ApiResponse<MeResponse> me(HttpServletRequest request) {
         return ApiResponse.ok(authService.me(extractSessionToken(request)));
     }

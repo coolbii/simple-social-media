@@ -42,12 +42,12 @@ class CommentServiceTest {
     }
 
     @Test
-    void listComments_shouldSortByCreatedAtAndMapDeletedPlaceholder() {
+    void listCommentsShouldSortByCreatedAtAndMapDeletedPlaceholder() {
         when(commentMapper.listCommentsByPost(1L))
             .thenReturn(
                 List.of(
-                    comment(2L, 1L, 1L, "Brian", 1L, "deleted", "2026-03-29T09:02:00Z", "2026-03-29T09:05:00Z"),
-                    comment(1L, 1L, 2L, "Alice", null, "first", "2026-03-29T09:01:00Z", null)
+                    deletedComment(2L, 1L, 1L, "Brian", 1L, "deleted", "2026-03-29T09:02:00Z"),
+                    comment(1L, 1L, 2L, "Alice", null, "first", "2026-03-29T09:01:00Z")
                 )
             );
 
@@ -62,13 +62,13 @@ class CommentServiceTest {
     }
 
     @Test
-    void listCommentsPage_shouldReturnPageAndNextOffset() {
+    void listCommentsPageShouldReturnPageAndNextOffset() {
         when(commentMapper.listCommentsPage(1L, null, true, 0, 3))
             .thenReturn(
                 List.of(
-                    comment(1L, 1L, 2L, "Alice", null, "first", "2026-03-29T09:01:00Z", null),
-                    comment(2L, 1L, 1L, "Brian", null, "second", "2026-03-29T09:02:00Z", null),
-                    comment(3L, 1L, 3L, "Carol", null, "third", "2026-03-29T09:03:00Z", null)
+                    comment(1L, 1L, 2L, "Alice", null, "first", "2026-03-29T09:01:00Z"),
+                    comment(2L, 1L, 1L, "Brian", null, "second", "2026-03-29T09:02:00Z"),
+                    comment(3L, 1L, 3L, "Carol", null, "third", "2026-03-29T09:03:00Z")
                 )
             );
 
@@ -81,11 +81,11 @@ class CommentServiceTest {
     }
 
     @Test
-    void listCommentsPage_shouldValidateParentWhenProvided() {
+    void listCommentsPageShouldValidateParentWhenProvided() {
         when(commentMapper.getCommentById(9L))
-            .thenReturn(comment(9L, 1L, 1L, "Brian", null, "parent", "2026-03-29T09:00:00Z", null));
+            .thenReturn(comment(9L, 1L, 1L, "Brian", null, "parent", "2026-03-29T09:00:00Z"));
         when(commentMapper.listCommentsPage(1L, 9L, false, 0, 2))
-            .thenReturn(List.of(comment(10L, 1L, 2L, "Alice", 9L, "child", "2026-03-29T09:01:00Z", null)));
+            .thenReturn(List.of(comment(10L, 1L, 2L, "Alice", 9L, "child", "2026-03-29T09:01:00Z")));
 
         CommentPageResponse page = commentService.listCommentsPage(1L, 9L, 0, 1);
 
@@ -95,7 +95,7 @@ class CommentServiceTest {
     }
 
     @Test
-    void listCommentsPage_shouldRejectNegativeOffset() {
+    void listCommentsPageShouldRejectNegativeOffset() {
         ApiException exception = assertThrows(
             ApiException.class,
             () -> commentService.listCommentsPage(1L, null, -1, 5)
@@ -107,7 +107,7 @@ class CommentServiceTest {
     }
 
     @Test
-    void listCommentsPage_shouldRejectLimitOutOfRange() {
+    void listCommentsPageShouldRejectLimitOutOfRange() {
         ApiException exception = assertThrows(
             ApiException.class,
             () -> commentService.listCommentsPage(1L, null, 0, 99)
@@ -119,14 +119,14 @@ class CommentServiceTest {
     }
 
     @Test
-    void createComment_shouldCreateReplyWhenParentExists() {
+    void createCommentShouldCreateReplyWhenParentExists() {
         when(commentMapper.getCommentById(1L))
-            .thenReturn(comment(1L, 1L, 1L, "Brian", null, "parent", "2026-03-29T09:00:00Z", null));
+            .thenReturn(comment(1L, 1L, 1L, "Brian", null, "parent", "2026-03-29T09:00:00Z"));
         when(commentMapper.createComment(1L, 2L, 1L, "Reply on seeded comment"))
             .thenReturn(3L);
         when(commentMapper.getCommentById(3L))
             .thenReturn(
-                comment(3L, 1L, 2L, "Alice", 1L, "Reply on seeded comment", "2026-03-29T09:10:00Z", null)
+                comment(3L, 1L, 2L, "Alice", 1L, "Reply on seeded comment", "2026-03-29T09:10:00Z")
             );
 
         CommentResponse created = commentService.createComment(
@@ -144,7 +144,7 @@ class CommentServiceTest {
     }
 
     @Test
-    void createComment_shouldRejectUnknownParentCommentId() {
+    void createCommentShouldRejectUnknownParentCommentId() {
         when(commentMapper.getCommentById(999L)).thenReturn(null);
 
         ApiException exception = assertThrows(
@@ -158,11 +158,11 @@ class CommentServiceTest {
     }
 
     @Test
-    void deleteComment_shouldSoftDeleteAndKeepThreadNode() {
+    void deleteCommentShouldSoftDeleteAndKeepThreadNode() {
         when(commentMapper.getCommentById(1L))
-            .thenReturn(comment(1L, 1L, 1L, "Brian", null, "active", "2026-03-29T09:00:00Z", null));
+            .thenReturn(comment(1L, 1L, 1L, "Brian", null, "active", "2026-03-29T09:00:00Z"));
         when(commentMapper.softDeleteComment(1L))
-            .thenReturn(comment(1L, 1L, 1L, "Brian", null, "active", "2026-03-29T09:00:00Z", "2026-03-29T09:12:00Z"));
+            .thenReturn(deletedComment(1L, 1L, 1L, "Brian", null, "active", "2026-03-29T09:00:00Z"));
 
         CommentResponse deleted = commentService.deleteComment(1L, 1L, 1L);
 
@@ -171,9 +171,9 @@ class CommentServiceTest {
     }
 
     @Test
-    void deleteComment_shouldRejectNonOwner() {
+    void deleteCommentShouldRejectNonOwner() {
         when(commentMapper.getCommentById(1L))
-            .thenReturn(comment(1L, 1L, 1L, "Brian", null, "active", "2026-03-29T09:00:00Z", null));
+            .thenReturn(comment(1L, 1L, 1L, "Brian", null, "active", "2026-03-29T09:00:00Z"));
 
         ApiException exception = assertThrows(ApiException.class, () -> commentService.deleteComment(1L, 1L, 2L));
 
@@ -183,9 +183,9 @@ class CommentServiceTest {
     }
 
     @Test
-    void deleteComment_shouldRejectCommentFromDifferentPost() {
+    void deleteCommentShouldRejectCommentFromDifferentPost() {
         when(commentMapper.getCommentById(1L))
-            .thenReturn(comment(1L, 2L, 1L, "Brian", null, "active", "2026-03-29T09:00:00Z", null));
+            .thenReturn(comment(1L, 2L, 1L, "Brian", null, "active", "2026-03-29T09:00:00Z"));
 
         ApiException exception = assertThrows(ApiException.class, () -> commentService.deleteComment(1L, 1L, 1L));
 
@@ -195,11 +195,11 @@ class CommentServiceTest {
     }
 
     @Test
-    void updateComment_shouldUpdateOwnedComment() {
+    void updateCommentShouldUpdateOwnedComment() {
         when(commentMapper.getCommentById(5L))
-            .thenReturn(comment(5L, 1L, 2L, "Alice", null, "before", "2026-03-29T09:00:00Z", null));
+            .thenReturn(comment(5L, 1L, 2L, "Alice", null, "before", "2026-03-29T09:00:00Z"));
         when(commentMapper.updateComment(5L, "after"))
-            .thenReturn(comment(5L, 1L, 2L, "Alice", null, "after", "2026-03-29T09:00:00Z", null));
+            .thenReturn(comment(5L, 1L, 2L, "Alice", null, "after", "2026-03-29T09:00:00Z"));
 
         CommentResponse updated = commentService.updateComment(1L, 5L, new UpdateCommentRequest("after"), 2L);
 
@@ -208,9 +208,9 @@ class CommentServiceTest {
     }
 
     @Test
-    void updateComment_shouldRejectNonOwner() {
+    void updateCommentShouldRejectNonOwner() {
         when(commentMapper.getCommentById(5L))
-            .thenReturn(comment(5L, 1L, 2L, "Alice", null, "before", "2026-03-29T09:00:00Z", null));
+            .thenReturn(comment(5L, 1L, 2L, "Alice", null, "before", "2026-03-29T09:00:00Z"));
 
         ApiException exception = assertThrows(
             ApiException.class,
@@ -223,9 +223,9 @@ class CommentServiceTest {
     }
 
     @Test
-    void updateComment_shouldRejectDeletedComment() {
+    void updateCommentShouldRejectDeletedComment() {
         when(commentMapper.getCommentById(5L))
-            .thenReturn(comment(5L, 1L, 2L, "Alice", null, "before", "2026-03-29T09:00:00Z", "2026-03-29T09:20:00Z"));
+            .thenReturn(deletedComment(5L, 1L, 2L, "Alice", null, "before", "2026-03-29T09:00:00Z"));
 
         ApiException exception = assertThrows(
             ApiException.class,
@@ -238,9 +238,9 @@ class CommentServiceTest {
     }
 
     @Test
-    void updateComment_shouldRejectCommentFromDifferentPost() {
+    void updateCommentShouldRejectCommentFromDifferentPost() {
         when(commentMapper.getCommentById(5L))
-            .thenReturn(comment(5L, 2L, 2L, "Alice", null, "before", "2026-03-29T09:00:00Z", null));
+            .thenReturn(comment(5L, 2L, 2L, "Alice", null, "before", "2026-03-29T09:00:00Z"));
 
         ApiException exception = assertThrows(
             ApiException.class,
@@ -253,24 +253,22 @@ class CommentServiceTest {
     }
 
     private Comment comment(
-        long id,
-        long postId,
-        long userId,
-        String userName,
-        Long parentCommentId,
-        String content,
-        String createdAt,
-        String deletedAt
+        long id, long postId, long userId, String userName,
+        Long parentCommentId, String content, String createdAt
     ) {
         return new Comment(
-            id,
-            postId,
-            userId,
-            userName,
-            parentCommentId,
-            content,
-            Instant.parse(createdAt),
-            deletedAt == null ? null : Instant.parse(deletedAt)
+            id, postId, userId, userName, parentCommentId, content,
+            Instant.parse(createdAt), null
+        );
+    }
+
+    private Comment deletedComment(
+        long id, long postId, long userId, String userName,
+        Long parentCommentId, String content, String createdAt
+    ) {
+        return new Comment(
+            id, postId, userId, userName, parentCommentId, content,
+            Instant.parse(createdAt), Instant.parse(createdAt)
         );
     }
 }
