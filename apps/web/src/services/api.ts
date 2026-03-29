@@ -196,3 +196,31 @@ export async function createComment(postId: number, payload: CreateCommentReques
   );
   return toCommentItem(response);
 }
+
+export async function uploadPostImage(file: File): Promise<string> {
+  const formData = new FormData();
+  formData.append('file', file);
+
+  const uploadUrl = OpenAPI.BASE ? `${OpenAPI.BASE}/api/uploads/post-image` : '/api/uploads/post-image';
+  const response = await fetch(uploadUrl, {
+    method: 'POST',
+    credentials: 'include',
+    body: formData,
+  });
+
+  const payload = await response.json().catch(() => null);
+  if (!response.ok) {
+    const message =
+      typeof payload?.error?.message === 'string' && payload.error.message.trim().length > 0
+        ? payload.error.message
+        : 'Image upload failed. Please try again.';
+    throw new Error(message);
+  }
+
+  const objectKey = payload?.data?.objectKey;
+  if (typeof objectKey !== 'string' || objectKey.trim().length === 0) {
+    throw new Error('Upload response missing object key.');
+  }
+
+  return objectKey;
+}

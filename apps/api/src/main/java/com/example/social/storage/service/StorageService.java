@@ -1,6 +1,7 @@
 package com.example.social.storage.service;
 
 import java.io.IOException;
+import java.net.URI;
 import java.time.Duration;
 import java.util.UUID;
 
@@ -17,9 +18,12 @@ import software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 import software.amazon.awssdk.services.s3.presigner.S3Presigner;
+import software.amazon.awssdk.services.s3.presigner.model.GetObjectPresignRequest;
 import software.amazon.awssdk.services.s3.presigner.model.PutObjectPresignRequest;
+import software.amazon.awssdk.services.s3.presigner.model.PresignedGetObjectRequest;
 import software.amazon.awssdk.services.s3.presigner.model.PresignedPutObjectRequest;
 
 @Service
@@ -28,6 +32,8 @@ public class StorageService {
     private final String bucket;
     private final String region;
     private final long presignExpireSeconds;
+    private final long signedGetExpireSeconds;
+    private final long maxFileSizeBytes;
     private final String publicBaseUrl;
     private final S3Client s3Client;
     private final S3Presigner s3Presigner;
@@ -36,6 +42,8 @@ public class StorageService {
         @Value("${app.storage.s3.bucket:}") String bucket,
         @Value("${app.storage.s3.region:}") String region,
         @Value("${app.storage.s3.presign-expire-seconds:900}") long presignExpireSeconds,
+        @Value("${app.storage.s3.signed-get-expire-seconds:3600}") long signedGetExpireSeconds,
+        @Value("${app.storage.max-file-size-bytes:1048576}") long maxFileSizeBytes,
         @Value("${app.storage.s3.public-base-url:}") String publicBaseUrl
     ) {
         if (bucket == null || bucket.isBlank() || region == null || region.isBlank()) {
@@ -49,6 +57,8 @@ public class StorageService {
         this.bucket = bucket.trim();
         this.region = region.trim();
         this.presignExpireSeconds = presignExpireSeconds;
+        this.signedGetExpireSeconds = signedGetExpireSeconds;
+        this.maxFileSizeBytes = maxFileSizeBytes;
         this.publicBaseUrl = publicBaseUrl == null ? "" : publicBaseUrl.trim();
 
         Region awsRegion = Region.of(this.region);
@@ -92,6 +102,24 @@ public class StorageService {
         );
     }
 
+    public String resolveImageUrl(String imageReference) {
+        if (imageReference == null || imageReference.isBlank()) {
+            return null;
+        }
+
+        String trimmed = imageReference.trim();
+        if (trimmed.startsWith("http://") || trimmed.startsWith("https://")) {
+            String extractedObjectKey = extractObjectKeyFromS3Url(trimmed);
+            if (extractedObjectKey != null) {
+                return presignGetObject(extractedObjectKey);
+            }
+            return trimmed;
+        }
+
+        String objectKey = trimmed.startsWith("/") ? trimmed.substring(1) : trimmed;
+        return presignGetObject(objectKey);
+    }
+
     private UploadResponse upload(String folder, MultipartFile file) {
         validateFile(file);
         String objectKey = folder + "/" + UUID.randomUUID() + "-" + sanitizeFileName(file.getOriginalFilename());
@@ -132,11 +160,11 @@ public class StorageService {
                 "Uploaded file must not be empty."
             );
         }
-        if (file.getSize() > 5_000_000) {
+        if (file.getSize() > maxFileSizeBytes) {
             throw new ApiException(
                 HttpStatus.PAYLOAD_TOO_LARGE,
                 ErrorCode.UPLOAD_TOO_LARGE,
-                "Uploaded file exceeds the 5 MB scaffold limit."
+                "Uploaded file exceeds the 1 MB limit."
             );
         }
     }
@@ -156,5 +184,44 @@ public class StorageService {
             return normalized + "/" + objectKey;
         }
         return "https://" + bucket + ".s3." + region + ".amazonaws.com/" + objectKey;
+    }
+
+    private String presignGetObject(String objectKey) {
+        GetObjectRequest getObjectRequest = GetObjectRequest.builder()
+            .bucket(bucket)
+            .key(objectKey)
+            .build();
+        GetObjectPresignRequest presignRequest = GetObjectPresignRequest.builder()
+            .signatureDuration(Duration.ofSeconds(signedGetExpireSeconds))
+            .getObjectRequest(getObjectRequest)
+            .build();
+
+        PresignedGetObjectRequest presignedRequest = s3Presigner.presignGetObject(presignRequest);
+        return presignedRequest.url().toString();
+    }
+
+    private String extractObjectKeyFromS3Url(String url) {
+        try {
+            URI uri = URI.create(url);
+            String host = uri.getHost();
+            if (host == null) {
+                return null;
+            }
+
+            String virtualHostedStyleDot = bucket + ".s3." + region + ".amazonaws.com";
+            String virtualHostedStyleDash = bucket + ".s3-" + region + ".amazonaws.com";
+            if (!host.equalsIgnoreCase(virtualHostedStyleDot) && !host.equalsIgnoreCase(virtualHostedStyleDash)) {
+                return null;
+            }
+
+            String path = uri.getPath();
+            if (path == null || path.isBlank() || "/".equals(path)) {
+                return null;
+            }
+
+            return path.startsWith("/") ? path.substring(1) : path;
+        } catch (Exception exception) {
+            return null;
+        }
     }
 }
