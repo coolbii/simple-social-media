@@ -1,12 +1,10 @@
 package com.example.social.auth.service;
 
 import java.nio.charset.StandardCharsets;
-import java.security.GeneralSecurityException;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
-import java.util.Base64;
 import java.util.HexFormat;
 import java.util.Map;
 import java.util.Optional;
@@ -14,13 +12,10 @@ import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.regex.Pattern;
-import javax.crypto.Mac;
-import javax.crypto.spec.SecretKeySpec;
 
 import com.example.social.auth.dto.LoginRequest;
 import com.example.social.auth.dto.LoginResponse;
 import com.example.social.auth.dto.MeResponse;
-import com.example.social.auth.dto.RefreshResponse;
 import com.example.social.auth.dto.RegisterRequest;
 import com.example.social.auth.dto.RegisterResponse;
 import com.example.social.auth.dto.SendCodeRequest;
@@ -40,15 +35,12 @@ import org.springframework.stereotype.Service;
 public class AuthService {
 
     private static final Pattern E164_PATTERN = Pattern.compile("^\\+[1-9]\\d{7,14}$");
-    private static final String HMAC_SHA256 = "HmacSHA256";
 
     private final PasswordEncoder passwordEncoder;
     private final SmsVerificationProvider smsVerificationProvider;
-    private final long accessTokenTtlSeconds;
     private final long refreshTokenTtlSeconds;
     private final long registrationTokenTtlSeconds;
     private final int otpMaxAttempts;
-    private final String accessTokenSecret;
     private final AtomicLong userSequence = new AtomicLong(2);
     private final Map<Long, RegisteredUser> users = new ConcurrentHashMap<>();
     private final Map<String, RegisteredUser> usersByPhone = new ConcurrentHashMap<>();
@@ -56,24 +48,19 @@ public class AuthService {
         new ConcurrentHashMap<>();
     private final Map<String, RegistrationTokenRecord> registrationTokens = new ConcurrentHashMap<>();
     private final Map<String, RefreshTokenRecord> refreshTokensByHash = new ConcurrentHashMap<>();
-    private final Map<String, Object> refreshTokenLocks = new ConcurrentHashMap<>();
 
     public AuthService(
         PasswordEncoder passwordEncoder,
         SmsVerificationProvider smsVerificationProvider,
-        @Value("${app.auth.access-token-ttl-seconds:900}") long accessTokenTtlSeconds,
         @Value("${app.auth.refresh-token-ttl-seconds:2592000}") long refreshTokenTtlSeconds,
         @Value("${app.auth.registration-token-ttl-seconds:600}") long registrationTokenTtlSeconds,
-        @Value("${app.auth.otp.max-attempts:5}") int otpMaxAttempts,
-        @Value("${app.auth.access-token-secret:change-me-in-env}") String accessTokenSecret
+        @Value("${app.auth.otp.max-attempts:5}") int otpMaxAttempts
     ) {
         this.passwordEncoder = passwordEncoder;
         this.smsVerificationProvider = smsVerificationProvider;
-        this.accessTokenTtlSeconds = accessTokenTtlSeconds;
         this.refreshTokenTtlSeconds = refreshTokenTtlSeconds;
         this.registrationTokenTtlSeconds = registrationTokenTtlSeconds;
         this.otpMaxAttempts = otpMaxAttempts;
-        this.accessTokenSecret = accessTokenSecret;
         seedUsers();
     }
 
@@ -239,93 +226,41 @@ public class AuthService {
                     )
             );
 
-        String refreshToken = issueRefreshToken(user.id(), null, null);
+        String sessionToken = issueSessionToken(user.id());
         return new LoginSession(
-            new LoginResponse(newAccessToken(user.id()), accessTokenTtlSeconds, toSummary(user)),
-            refreshToken
+            new LoginResponse(toSummary(user)),
+            sessionToken
         );
     }
 
-    public RefreshSession refresh(String rawRefreshToken) {
+    public void logout(String rawSessionToken) {
         evictExpiredRecords();
 
-        if (rawRefreshToken == null || rawRefreshToken.isBlank()) {
-            throw new ApiException(
-                HttpStatus.UNAUTHORIZED,
-                ErrorCode.AUTH_REFRESH_TOKEN_MISSING,
-                "Refresh token is missing."
-            );
-        }
-
-        String tokenHash = sha256(rawRefreshToken);
-        Object lock = refreshTokenLocks.computeIfAbsent(tokenHash, ignored -> new Object());
-        try {
-            synchronized (lock) {
-                RefreshTokenRecord current = refreshTokensByHash.get(tokenHash);
-                if (current == null) {
-                    throw new ApiException(
-                        HttpStatus.UNAUTHORIZED,
-                        ErrorCode.AUTH_REFRESH_TOKEN_INVALID,
-                        "Refresh token is invalid."
-                    );
-                }
-
-                if (Instant.now().isAfter(current.expiresAt())) {
-                    refreshTokensByHash.remove(tokenHash);
-                    throw new ApiException(
-                        HttpStatus.UNAUTHORIZED,
-                        ErrorCode.AUTH_REFRESH_TOKEN_INVALID,
-                        "Refresh token has expired."
-                    );
-                }
-
-                if (!current.revokeIfActive("ROTATED")) {
-                    revokeFamily(current.familyId(), "REUSE_DETECTED");
-                    throw new ApiException(
-                        HttpStatus.UNAUTHORIZED,
-                        ErrorCode.AUTH_REFRESH_TOKEN_REUSE_DETECTED,
-                        "Refresh token reuse detected."
-                    );
-                }
-
-                String nextRefreshToken = issueRefreshToken(
-                    current.userId(),
-                    current.familyId(),
-                    current.tokenHash()
-                );
-                return new RefreshSession(
-                    new RefreshResponse(newAccessToken(current.userId()), accessTokenTtlSeconds),
-                    nextRefreshToken
-                );
-            }
-        } finally {
-            refreshTokenLocks.remove(tokenHash, lock);
-        }
-    }
-
-    public void logout(String rawRefreshToken) {
-        evictExpiredRecords();
-
-        if (rawRefreshToken == null || rawRefreshToken.isBlank()) {
+        if (rawSessionToken == null || rawSessionToken.isBlank()) {
             return;
         }
-        RefreshTokenRecord token = refreshTokensByHash.get(sha256(rawRefreshToken));
+        RefreshTokenRecord token = refreshTokensByHash.get(sha256(rawSessionToken));
         if (token != null) {
             token.revokeIfActive("LOGOUT");
         }
     }
 
-    public MeResponse me(String accessToken) {
+    public MeResponse me(String rawSessionToken) {
         evictExpiredRecords();
 
-        long userId = parseAndValidateAccessToken(accessToken);
+        if (rawSessionToken == null || rawSessionToken.isBlank()) {
+            throw unauthorized("Session is missing.");
+        }
+
+        RefreshTokenRecord session = refreshTokensByHash.get(sha256(rawSessionToken));
+        if (session == null || Instant.now().isAfter(session.expiresAt()) || session.revokedAt() != null) {
+            throw unauthorized("Session is invalid.");
+        }
+
+        long userId = session.userId();
         RegisteredUser user = users.get(userId);
         if (user == null) {
-            throw new ApiException(
-                HttpStatus.UNAUTHORIZED,
-                ErrorCode.AUTH_UNAUTHORIZED,
-                "Access token is invalid."
-            );
+            throw unauthorized("Session is invalid.");
         }
 
         return new MeResponse(
@@ -364,87 +299,20 @@ public class AuthService {
         return new UserSummary(user.id(), user.userName(), user.phoneNumber());
     }
 
-    private String newAccessToken(long userId) {
-        long expiresAtEpochSeconds = Instant.now().plusSeconds(accessTokenTtlSeconds).getEpochSecond();
-        String payload = userId + ":" + expiresAtEpochSeconds;
-        String encodedPayload = Base64.getUrlEncoder()
-            .withoutPadding()
-            .encodeToString(payload.getBytes(StandardCharsets.UTF_8));
-        String signature = Base64.getUrlEncoder().withoutPadding().encodeToString(hmac(payload));
-        return encodedPayload + "." + signature;
-    }
-
-    private long parseAndValidateAccessToken(String token) {
-        if (token == null || token.isBlank()) {
-            throw unauthorized("Access token is missing.");
-        }
-
-        String[] parts = token.split("\\.");
-        if (parts.length != 2) {
-            throw unauthorized("Access token format is invalid.");
-        }
-
-        String payload;
-        try {
-            payload = new String(Base64.getUrlDecoder().decode(parts[0]), StandardCharsets.UTF_8);
-        } catch (IllegalArgumentException exception) {
-            throw unauthorized("Access token payload is invalid.");
-        }
-
-        byte[] providedSignature;
-        try {
-            providedSignature = Base64.getUrlDecoder().decode(parts[1]);
-        } catch (IllegalArgumentException exception) {
-            throw unauthorized("Access token signature is invalid.");
-        }
-
-        byte[] expectedSignature = hmac(payload);
-        if (!MessageDigest.isEqual(expectedSignature, providedSignature)) {
-            throw unauthorized("Access token signature is invalid.");
-        }
-
-        String[] segments = payload.split(":");
-        if (segments.length != 2) {
-            throw unauthorized("Access token payload is malformed.");
-        }
-
-        try {
-            long userId = Long.parseLong(segments[0]);
-            long expiresAt = Long.parseLong(segments[1]);
-            if (Instant.now().isAfter(Instant.ofEpochSecond(expiresAt))) {
-                throw unauthorized("Access token has expired.");
-            }
-            return userId;
-        } catch (NumberFormatException exception) {
-            throw unauthorized("Access token payload is malformed.");
-        }
-    }
-
     private ApiException unauthorized(String message) {
         return new ApiException(HttpStatus.UNAUTHORIZED, ErrorCode.AUTH_UNAUTHORIZED, message);
     }
 
-    private String issueRefreshToken(long userId, String familyId, String parentTokenHash) {
+    private String issueSessionToken(long userId) {
         String token = "rt_" + UUID.randomUUID() + UUID.randomUUID();
         String tokenHash = sha256(token);
-        String resolvedFamilyId = familyId == null || familyId.isBlank() ? UUID.randomUUID().toString() : familyId;
         RefreshTokenRecord record = new RefreshTokenRecord(
             tokenHash,
             userId,
-            resolvedFamilyId,
-            parentTokenHash,
             Instant.now().plusSeconds(refreshTokenTtlSeconds)
         );
         refreshTokensByHash.put(tokenHash, record);
         return token;
-    }
-
-    private void revokeFamily(String familyId, String reason) {
-        for (RefreshTokenRecord token : refreshTokensByHash.values()) {
-            if (token.familyId().equals(familyId)) {
-                token.revokeIfActive(reason);
-            }
-        }
     }
 
     private String normalizePhoneNumber(String phoneNumber) {
@@ -469,16 +337,6 @@ public class AuthService {
         return normalized;
     }
 
-    private byte[] hmac(String payload) {
-        try {
-            Mac mac = Mac.getInstance(HMAC_SHA256);
-            mac.init(new SecretKeySpec(accessTokenSecret.getBytes(StandardCharsets.UTF_8), HMAC_SHA256));
-            return mac.doFinal(payload.getBytes(StandardCharsets.UTF_8));
-        } catch (GeneralSecurityException exception) {
-            throw new IllegalStateException("HmacSHA256 is not available", exception);
-        }
-    }
-
     private void evictExpiredRecords() {
         Instant now = Instant.now();
         verificationRequestsByPhone.entrySet().removeIf(entry -> now.isAfter(entry.getValue().expiresAt()));
@@ -486,7 +344,6 @@ public class AuthService {
             entry -> now.isAfter(entry.getValue().expiresAt()) || entry.getValue().consumedAt() != null
         );
         refreshTokensByHash.entrySet().removeIf(entry -> now.isAfter(entry.getValue().expiresAt()));
-        refreshTokenLocks.keySet().removeIf(hash -> !refreshTokensByHash.containsKey(hash));
     }
 
     private ApiException tooManyVerifyAttempts() {
@@ -506,10 +363,7 @@ public class AuthService {
         }
     }
 
-    public record LoginSession(LoginResponse response, String refreshToken) {
-    }
-
-    public record RefreshSession(RefreshResponse response, String refreshToken) {
+    public record LoginSession(LoginResponse response, String sessionToken) {
     }
 
     private record VerificationRequestRecord(
@@ -533,8 +387,6 @@ public class AuthService {
 
         private final String tokenHash;
         private final long userId;
-        private final String familyId;
-        private final String parentTokenHash;
         private final Instant expiresAt;
         private volatile Instant revokedAt;
         private volatile String revokeReason;
@@ -542,14 +394,10 @@ public class AuthService {
         private RefreshTokenRecord(
             String tokenHash,
             long userId,
-            String familyId,
-            String parentTokenHash,
             Instant expiresAt
         ) {
             this.tokenHash = tokenHash;
             this.userId = userId;
-            this.familyId = familyId;
-            this.parentTokenHash = parentTokenHash;
             this.expiresAt = expiresAt;
         }
 
@@ -559,14 +407,6 @@ public class AuthService {
 
         private long userId() {
             return userId;
-        }
-
-        private String familyId() {
-            return familyId;
-        }
-
-        private String parentTokenHash() {
-            return parentTokenHash;
         }
 
         private Instant expiresAt() {

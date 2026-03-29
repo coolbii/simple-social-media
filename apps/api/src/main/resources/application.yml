@@ -31,7 +31,7 @@ app:
     otp:
       max-attempts: ${AUTH_OTP_MAX_ATTEMPTS:5}
     access-token-secret: ${AUTH_ACCESS_TOKEN_SECRET:change-me-in-env}
-    refresh-cookie-name: ${AUTH_REFRESH_COOKIE_NAME:refreshToken}
+    session-cookie-name: ${AUTH_SESSION_COOKIE_NAME:social.sid}
     # Set true in production (HTTPS) to prevent cookie exposure over HTTP.
     cookie-secure: ${AUTH_COOKIE_SECURE:false}
     cookie-same-site: ${AUTH_COOKIE_SAME_SITE:Lax}
