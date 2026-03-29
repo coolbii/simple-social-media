@@ -75,18 +75,25 @@ function toPostItem(post: PostResponse): PostItem {
     content: required(post.content, 'post.content'),
     imageUrl: post.imageUrl ?? null,
     createdAt: required(post.createdAt, 'post.createdAt'),
-    updatedAt: required(post.updatedAt, 'post.updatedAt'),
+    updatedAt: post.updatedAt ?? null,
   };
 }
 
 function toCommentItem(comment: CommentResponse): CommentItem {
+  const enrichedComment = comment as CommentResponse & {
+    parentCommentId?: number | null;
+    deleted?: boolean;
+  };
+  const parentCommentId = enrichedComment.parentCommentId ?? null;
   return {
     id: required(comment.id, 'comment.id'),
     postId: required(comment.postId, 'comment.postId'),
     userId: required(comment.userId, 'comment.userId'),
     userName: required(comment.userName, 'comment.userName'),
+    parentCommentId,
     content: required(comment.content, 'comment.content'),
     createdAt: required(comment.createdAt, 'comment.createdAt'),
+    deleted: enrichedComment.deleted ?? false,
   };
 }
 
@@ -190,11 +197,41 @@ export async function fetchComments(postId: number): Promise<CommentItem[]> {
   return response.map(toCommentItem);
 }
 
-export async function createComment(postId: number, payload: CreateCommentRequest): Promise<CommentItem> {
+export async function createComment(
+  postId: number,
+  payload: { content: string; parentCommentId?: number | null }
+): Promise<CommentItem> {
   const response = await withAuth<CommentResponse>(() =>
-    CommentsService.createComment({ postId, requestBody: payload })
+    CommentsService.createComment({ postId, requestBody: payload as unknown as CreateCommentRequest })
   );
   return toCommentItem(response);
+}
+
+export async function deleteComment(postId: number, commentId: number): Promise<CommentItem> {
+  const url = OpenAPI.BASE
+    ? `${OpenAPI.BASE}/api/posts/${postId}/comments/${commentId}`
+    : `/api/posts/${postId}/comments/${commentId}`;
+
+  const response = await fetch(url, {
+    method: 'DELETE',
+    credentials: 'include',
+  });
+
+  const payload = await response.json().catch(() => null);
+  if (!response.ok) {
+    const message =
+      typeof payload?.error?.message === 'string' && payload.error.message.trim().length > 0
+        ? payload.error.message
+        : 'Delete comment failed. Please try again.';
+    throw new Error(message);
+  }
+
+  const data = payload?.data as CommentResponse | undefined;
+  if (!data) {
+    throw new Error('Delete comment response missing data.');
+  }
+
+  return toCommentItem(data);
 }
 
 export async function uploadPostImage(file: File): Promise<string> {

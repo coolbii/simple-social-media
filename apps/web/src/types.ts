@@ -24,7 +24,7 @@ export interface PostItem {
   content: string;
   imageUrl?: string | null;
   createdAt: string;
-  updatedAt: string;
+  updatedAt?: string | null;
 }
 
 export interface CommentItem {
@@ -32,8 +32,10 @@ export interface CommentItem {
   postId: number;
   userId: number;
   userName: string;
+  parentCommentId?: number | null;
   content: string;
   createdAt: string;
+  deleted?: boolean;
 }
 
 export interface CommentCreatedEvent {
