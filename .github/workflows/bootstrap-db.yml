@@ -15,35 +15,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install MySQL client
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y mysql-client
-
       - name: Validate required secrets
-        env:
-          RDS_HOST: ${{ secrets.RDS_HOST }}
-          RDS_PORT: ${{ secrets.RDS_PORT }}
-          RDS_ADMIN_USER: ${{ secrets.RDS_ADMIN_USER }}
-          RDS_ADMIN_PASSWORD: ${{ secrets.RDS_ADMIN_PASSWORD }}
-          RDS_APP_USER: ${{ secrets.RDS_APP_USER }}
-          RDS_APP_PASSWORD: ${{ secrets.RDS_APP_PASSWORD }}
-        run: |
-          set -euo pipefail
-          for key in \
-            RDS_HOST \
-            RDS_PORT \
-            RDS_ADMIN_USER \
-            RDS_ADMIN_PASSWORD \
-            RDS_APP_USER \
-            RDS_APP_PASSWORD; do
-            if [[ -z "${!key:-}" ]]; then
-              echo "::error::Missing required secret: ${key}"
-              exit 1
-            fi
-          done
-
-      - name: Bootstrap database and app user
         env:
           RDS_HOST: ${{ secrets.RDS_HOST }}
           RDS_PORT: ${{ secrets.RDS_PORT }}
@@ -52,10 +24,83 @@ jobs:
           RDS_DATABASE: ${{ secrets.RDS_DATABASE }}
           RDS_APP_USER: ${{ secrets.RDS_APP_USER }}
           RDS_APP_PASSWORD: ${{ secrets.RDS_APP_PASSWORD }}
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+          EC2_USER: ${{ secrets.EC2_USER }}
+          EC2_SSH_PRIVATE_KEY: ${{ secrets.EC2_SSH_PRIVATE_KEY }}
         run: |
           set -euo pipefail
+          for key in \
+            RDS_HOST \
+            RDS_PORT \
+            RDS_ADMIN_USER \
+            RDS_ADMIN_PASSWORD \
+            RDS_APP_USER \
+            RDS_APP_PASSWORD \
+            EC2_HOST \
+            EC2_USER \
+            EC2_SSH_PRIVATE_KEY; do
+            if [[ -z "${!key:-}" ]]; then
+              echo "::error::Missing required secret: ${key}"
+              exit 1
+            fi
+          done
+
+      - name: Configure SSH key
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          echo "${{ secrets.EC2_SSH_PRIVATE_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          if [[ -n "${{ secrets.EC2_SSH_KNOWN_HOSTS }}" ]]; then
+            echo "${{ secrets.EC2_SSH_KNOWN_HOSTS }}" >> ~/.ssh/known_hosts
+          else
+            ssh-keyscan -H "${{ secrets.EC2_HOST }}" >> ~/.ssh/known_hosts
+          fi
+
+      - name: Bootstrap database and app user from EC2
+        env:
+          RDS_HOST: ${{ secrets.RDS_HOST }}
+          RDS_PORT: ${{ secrets.RDS_PORT }}
+          RDS_ADMIN_USER: ${{ secrets.RDS_ADMIN_USER }}
+          RDS_ADMIN_PASSWORD: ${{ secrets.RDS_ADMIN_PASSWORD }}
+          RDS_DATABASE: ${{ secrets.RDS_DATABASE }}
+          RDS_APP_USER: ${{ secrets.RDS_APP_USER }}
+          RDS_APP_PASSWORD: ${{ secrets.RDS_APP_PASSWORD }}
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+          EC2_USER: ${{ secrets.EC2_USER }}
+        run: |
+          set -euo pipefail
+
+          b64() {
+            printf '%s' "$1" | base64 | tr -d '\n'
+          }
+
+          ssh "${EC2_USER}@${EC2_HOST}" \
+            "RDS_HOST_B64='$(b64 "${RDS_HOST}")' \
+             RDS_PORT_B64='$(b64 "${RDS_PORT}")' \
+             RDS_ADMIN_USER_B64='$(b64 "${RDS_ADMIN_USER}")' \
+             RDS_ADMIN_PASSWORD_B64='$(b64 "${RDS_ADMIN_PASSWORD}")' \
+             RDS_DATABASE_B64='$(b64 "${RDS_DATABASE}")' \
+             RDS_APP_USER_B64='$(b64 "${RDS_APP_USER}")' \
+             RDS_APP_PASSWORD_B64='$(b64 "${RDS_APP_PASSWORD}")' \
+             bash -s" <<'REMOTE'
+          set -euo pipefail
+
+          decode() {
+            printf '%s' "$1" | base64 -d
+          }
+
+          RDS_HOST="$(decode "${RDS_HOST_B64}")"
+          RDS_PORT="$(decode "${RDS_PORT_B64}")"
+          RDS_ADMIN_USER="$(decode "${RDS_ADMIN_USER_B64}")"
+          RDS_ADMIN_PASSWORD="$(decode "${RDS_ADMIN_PASSWORD_B64}")"
+          RDS_DATABASE="$(decode "${RDS_DATABASE_B64}")"
+          RDS_APP_USER="$(decode "${RDS_APP_USER_B64}")"
+          RDS_APP_PASSWORD="$(decode "${RDS_APP_PASSWORD_B64}")"
           DB_NAME="${RDS_DATABASE:-simple_social_media}"
-          mysql \
+
+          docker run --rm -i mysql:8 mysql \
             --host="${RDS_HOST}" \
             --port="${RDS_PORT}" \
             --user="${RDS_ADMIN_USER}" \
@@ -75,16 +120,7 @@ jobs:
           FLUSH PRIVILEGES;
           SQL
 
-      - name: Verify grants
-        env:
-          RDS_HOST: ${{ secrets.RDS_HOST }}
-          RDS_PORT: ${{ secrets.RDS_PORT }}
-          RDS_ADMIN_USER: ${{ secrets.RDS_ADMIN_USER }}
-          RDS_ADMIN_PASSWORD: ${{ secrets.RDS_ADMIN_PASSWORD }}
-          RDS_APP_USER: ${{ secrets.RDS_APP_USER }}
-        run: |
-          set -euo pipefail
-          mysql \
+          docker run --rm mysql:8 mysql \
             --host="${RDS_HOST}" \
             --port="${RDS_PORT}" \
             --user="${RDS_ADMIN_USER}" \
@@ -92,20 +128,11 @@ jobs:
             --batch --skip-column-names \
             --execute="SHOW GRANTS FOR '${RDS_APP_USER}'@'%';"
 
-      - name: Verify app user login
-        env:
-          RDS_HOST: ${{ secrets.RDS_HOST }}
-          RDS_PORT: ${{ secrets.RDS_PORT }}
-          RDS_DATABASE: ${{ secrets.RDS_DATABASE }}
-          RDS_APP_USER: ${{ secrets.RDS_APP_USER }}
-          RDS_APP_PASSWORD: ${{ secrets.RDS_APP_PASSWORD }}
-        run: |
-          set -euo pipefail
-          DB_NAME="${RDS_DATABASE:-simple_social_media}"
-          mysql \
+          docker run --rm mysql:8 mysql \
             --host="${RDS_HOST}" \
             --port="${RDS_PORT}" \
             --user="${RDS_APP_USER}" \
             --password="${RDS_APP_PASSWORD}" \
             --database="${DB_NAME}" \
             --execute="SELECT 1;"
+          REMOTE
