@@ -1,1 +1,1 @@
-export * from './lib/api-contract';
+export * from './generated/index';
