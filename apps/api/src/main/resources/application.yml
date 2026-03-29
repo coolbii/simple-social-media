@@ -43,3 +43,9 @@ app:
         verify-service-sid: ${TWILIO_VERIFY_SERVICE_SID:}
         # Keep aligned with existing Python service default.
         locale: ${TWILIO_VERIFY_LOCALE:zh-HK}
+  storage:
+    s3:
+      bucket: ${AWS_S3_BUCKET:}
+      region: ${AWS_REGION:}
+      presign-expire-seconds: ${AWS_S3_PRESIGN_EXPIRE_SECONDS:900}
+      public-base-url: ${AWS_S3_PUBLIC_BASE_URL:}
