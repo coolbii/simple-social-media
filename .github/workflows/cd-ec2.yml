@@ -105,7 +105,8 @@ jobs:
       - name: Upload deployment manifests
         run: |
           set -euo pipefail
-          ssh "${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}" "mkdir -p ${DEPLOY_PATH}"
+          ssh "${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}" \
+            "sudo mkdir -p ${DEPLOY_PATH} && sudo chown -R \$(id -u):\$(id -g) ${DEPLOY_PATH}"
           scp -r deploy "${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:${DEPLOY_PATH}/"
 
       - name: Deploy on EC2
